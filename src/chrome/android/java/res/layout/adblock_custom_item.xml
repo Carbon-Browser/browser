@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingTop="8dp"
+    android:paddingBottom="8dp"
+    tools:ignore="UseCompoundDrawables">
+
+    <!-- Domain/URL -->
+    <TextView
+        android:id="@+id/fragment_adblock_custom_item_title"
+        android:layout_width="0dp"
+        android:layout_weight="1"
+        android:layout_height="wrap_content"
+        android:paddingStart="0dp"
+        android:textAppearance="?android:attr/textAppearanceMedium"
+        tools:text="http://www.google.com"/>
+
+    <!-- Remove button
+         UseCompoundDrawables added to parent element to suppress warning
+         because implementation will listen for clicks on this view,
+         not whole element.
+    -->
+    <ImageView
+        android:contentDescription="@null"
+        android:id="@+id/fragment_adblock_custom_item_remove"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:src="@drawable/fragment_adblock_custom_item_remove"
+        android:paddingStart="16dp" />
+
+</LinearLayout>

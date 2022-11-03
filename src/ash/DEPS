@@ -1,0 +1,115 @@
+include_rules = [
+  "+device/bluetooth",
+  "+cc/debug",
+  "+cc/output",
+  "+cc/paint",
+  "+chromeos/cryptohome",
+  "+components/account_id",
+  "+components/discardable_memory/public",
+  "+components/discardable_memory/service/discardable_shared_memory_manager.h",
+  "+components/full_restore",
+  "+components/live_caption",
+  "+components/media_message_center",
+  "+components/pref_registry",
+  "+components/prefs",
+  "+components/quirks",
+  "+components/services/app_service/public",
+  "+components/session_manager",
+  "+components/soda",
+  "+components/strings",
+  "+components/sync",
+  "+components/ui_devtools",
+  "+components/user_manager",
+  "+components/vector_icons",
+  "+components/viz/common",
+  "+components/viz/host",
+  "+components/wallpaper",
+  "+dbus",
+  "+extensions/common/constants.h",
+  "+gpu/config",
+  "+media",
+  "+mojo/public",
+  "+services/device/public",
+  "+services/data_decoder/public",
+  "+services/media_session/public",
+  "+services/network/public",
+  "+services/network/test",
+  "+services/preferences/public",
+  "+services/viz/public",
+  "+skia/ext",
+  "+third_party/cros_system_api",
+  "+third_party/icu",
+  "+third_party/khronos/GLES2",
+  "+third_party/re2",
+  "+third_party/skia",
+  "+net",
+  "+ui",
+  "-ash/host",
+
+  # Ash sits above content. Exceptions live in //ash/webui.
+  "-content",
+
+  # Only allow Chrome OS services and D-Bus clients accessible to the mustash
+  # ash process.
+  "-chromeos",
+  "+chromeos/components/feature_usage/feature_usage_metrics.h",
+  "+chromeos/components/multidevice/logging/logging.h",
+  "+chromeos/components/phonehub",
+  "+chromeos/components/proximity_auth/public/mojom",
+  "+chromeos/components/sensors",
+  "+chromeos/crosapi/cpp/crosapi_constants.h",
+  "+chromeos/crosapi/mojom",
+  "+chromeos/dbus/initialize_dbus_client.h",
+  "+chromeos/dbus/audio",
+  "+chromeos/dbus/init",
+  "+chromeos/dbus/hammerd",
+  "+chromeos/dbus/hermes",
+  "+chromeos/dbus/power",
+  "+chromeos/dbus/power_manager",
+  "+chromeos/dbus/rmad",
+  "+chromeos/dbus/shill",
+  "+chromeos/dbus/system_clock",
+  "+chromeos/dbus/usb",
+  "+chromeos/network",
+  "+chromeos/services/assistant/public" ,
+  "+chromeos/services/assistant/test_support",
+  "+chromeos/services/libassistant/public/cpp",
+  "+chromeos/services/libassistant/public/mojom",
+  "+chromeos/services/machine_learning/public",
+  "+chromeos/services/multidevice_setup/public",
+  "+chromeos/services/nearby/public",
+  "+chromeos/services/network_config/public",
+  "+chromeos/services/power/public",
+  "+chromeos/settings/timezone_settings.h",
+  "+chromeos/strings",
+  "+chromeos/system",
+  # Do not eliminate this.
+  "+chromeos/ui",
+
+  # ui/base/idle depends on SessionManagerClient so disallow it.
+  "-ui/base/idle"
+
+  # InputMethodManager lives in the browser process. Use ImeController.
+  "-ui/base/ime/chromeos/input_method_manager.h"
+]
+
+specific_include_rules = {
+  "ash_service\.*": [
+    "+chromeos/cryptohome",
+  ],
+  "policy_recommendation_restorer_unittest.cc": [
+    "+components/sync_preferences/testing_pref_service_syncable.h"
+  ],
+  "root_window_controller\.*": [
+    "+ash/host"
+  ],
+  "shell.cc": [
+    "+ash/host/ash_window_tree_host_init_params.h"
+  ],
+  "window_manager.cc": [
+    "+ash/host/ash_window_tree_host.h"
+  ],
+  "window_service_delegate_impl.cc": [
+    "+ash/host/ash_window_tree_host.h"
+  ],
+}

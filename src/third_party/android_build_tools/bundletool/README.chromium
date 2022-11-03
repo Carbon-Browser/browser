@@ -1,0 +1,19 @@
+Name: Android SDK bundletool
+Short Name:  bundletool
+Version: 1.8.0
+License: Apache Version 2.0
+License File: NOT_SHIPPED
+Security Critical: No
+URL: https://github.com/google/bundletool
+
+Description:
+Bundletool is a tool to manipulate Android App Bundles.
+
+Local Modifications:
+None
+
+Update Instructions:
+* New versions are automatically copied from github release to CIPD via 3pp:
+    https://luci-scheduler.appspot.com/jobs/chromium/3pp-linux-amd64-packager
+* Find the CIPD hash of the latest versoin and update the entry within //DEPS.
+* Look at previous roll commit to see what other files need updating.

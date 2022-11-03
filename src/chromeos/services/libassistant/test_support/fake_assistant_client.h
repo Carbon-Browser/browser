@@ -1,0 +1,69 @@
+// Copyright 2021 The Chromium Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
+#ifndef CHROMEOS_SERVICES_LIBASSISTANT_TEST_SUPPORT_FAKE_ASSISTANT_CLIENT_H_
+#define CHROMEOS_SERVICES_LIBASSISTANT_TEST_SUPPORT_FAKE_ASSISTANT_CLIENT_H_
+
+#include "chromeos/assistant/internal/test_support/fake_assistant_manager.h"
+#include "chromeos/assistant/internal/test_support/fake_assistant_manager_internal.h"
+#include "chromeos/services/libassistant/grpc/assistant_client.h"
+
+namespace chromeos {
+namespace libassistant {
+
+class FakeAssistantClient : public AssistantClient {
+ public:
+  FakeAssistantClient(
+      std::unique_ptr<assistant::FakeAssistantManager> assistant_manager,
+      assistant::FakeAssistantManagerInternal* assistant_manager_internal);
+  ~FakeAssistantClient() override;
+
+  // chromeos::libassistant::AssistantClient:
+  assistant::FakeAssistantManager* assistant_manager() {
+    return reinterpret_cast<assistant::FakeAssistantManager*>(
+        AssistantClient::assistant_manager());
+  }
+  assistant::FakeAssistantManagerInternal* assistant_manager_internal() {
+    return reinterpret_cast<assistant::FakeAssistantManagerInternal*>(
+        AssistantClient::assistant_manager_internal());
+  }
+
+  void StartServices() override;
+  void SetChromeOSApiDelegate(
+      assistant_client::ChromeOSApiDelegate* delegate) override;
+  bool StartGrpcServices() override;
+  void AddExperimentIds(const std::vector<std::string>& exp_ids) override;
+  void SendVoicelessInteraction(
+      const ::assistant::api::Interaction& interaction,
+      const std::string& description,
+      const ::assistant::api::VoicelessOptions& options,
+      base::OnceCallback<void(bool)> on_done) override;
+  void AddSpeakerIdEnrollmentEventObserver(
+      GrpcServicesObserver<OnSpeakerIdEnrollmentEventRequest>* observer)
+      override;
+  void RemoveSpeakerIdEnrollmentEventObserver(
+      GrpcServicesObserver<OnSpeakerIdEnrollmentEventRequest>* observer)
+      override;
+  void StartSpeakerIdEnrollment(
+      const StartSpeakerIdEnrollmentRequest& request) override;
+  void CancelSpeakerIdEnrollment(
+      const CancelSpeakerIdEnrollmentRequest& request) override;
+  void GetSpeakerIdEnrollmentInfo(
+      const GetSpeakerIdEnrollmentInfoRequest& request,
+      base::OnceCallback<void(bool user_model_exists)> on_done) override;
+  void ResetAllDataAndShutdown() override;
+  void OnDisplayRequest(const OnDisplayRequestRequest& request) override;
+  void AddDisplayEventObserver(
+      GrpcServicesObserver<OnAssistantDisplayEventRequest>* observer) override;
+  void ResumeCurrentStream() override;
+  void PauseCurrentStream() override;
+  void SetExternalPlaybackState(const MediaStatus& status_proto) override;
+  void AddDeviceStateEventObserver(
+      GrpcServicesObserver<OnDeviceStateEventRequest>* observer) override;
+};
+
+}  // namespace libassistant
+}  // namespace chromeos
+
+#endif  // CHROMEOS_SERVICES_LIBASSISTANT_TEST_SUPPORT_FAKE_ASSISTANT_CLIENT_H_

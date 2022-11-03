@@ -1,0 +1,4 @@
+file://chrome/browser/resources/settings/chromeos/OWNERS
+
+per-file *internet*=azeemarshad@chromium.org
+per-file *internet*=jonmann@chromium.org

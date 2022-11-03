@@ -1,0 +1,13 @@
+Name: Glide GIF Decoder Library
+Short Name: gifdecoder
+URL: https://github.com/bumptech/glide
+Version: 4.11.0
+License: 
+License File: LICENSE
+Security Critical: yes
+
+Description:
+Implementation of GifDecoder that is more memory efficient to animate for Android devices.
+
+Local Modifications:
+No modifications.

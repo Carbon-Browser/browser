@@ -1,0 +1,13 @@
+Name: Android Multi-Dex Library
+Short Name: multidex
+URL: http://developer.android.com/tools/extras/support-library.html
+Version: 1.0.0
+License: 
+License File: LICENSE
+Security Critical: yes
+
+Description:
+Library for legacy multi-dex support
+
+Local Modifications:
+No modifications.

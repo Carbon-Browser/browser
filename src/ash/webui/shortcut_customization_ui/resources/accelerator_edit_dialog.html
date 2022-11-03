@@ -1,0 +1,48 @@
+<style include="shortcut-customization-shared">
+  #acceleratorViewList {
+    display: grid;
+    row-gap: 5px;
+  }
+
+  #addIcon {
+    --iron-icon-fill-color: #1A73E8;
+    padding-top: 11px;
+  }
+</style>
+
+<cr-dialog id="editDialog" on-close="onDialogClose_">
+  <div id="dialogTitle" slot="title">
+    [[description]]
+  </div>
+  <div slot="body">
+    <div id="acceleratorViewList">
+      <template is="dom-repeat" items=[[acceleratorInfos]]>
+        <accelerator-edit-view class="acceleratorItem"
+            accelerator-info=[[item]]>
+        </accelerator-edit-view>
+      </template>
+    </div>
+    <template id="newAccelerator" is="dom-if"
+        if="[[!showAddButton_(pendingNewAcceleratorState_)]]" restamp>
+      <accelerator-edit-view id="pendingAccelerator"
+          view-state="{{pendingNewAcceleratorState_}}">
+      </accelerator-edit-view>
+    </template>
+    <div id="addAcceleratorContainer"
+        hidden="[[!showAddButton_(pendingNewAcceleratorState_)]]">
+      <cr-button id="addAcceleratorButton" on-click="onAddAcceleratorClicked_">
+        <iron-icon id="addIcon" icon="shortcut-customization:add">
+        </iron-icon>
+        <!-- TODO(jimmyxgong): Localize this string -->
+        Add shortcut
+      </cr-button>
+    </div>
+
+  </div>
+  <div slot="button-container">
+    <cr-button id="doneButton" on-click="onDoneButtonClicked_">
+      <!-- TODO(jimmyxgong): Localize this string -->
+      Done
+    </cr-button>
+  </div>
+</cr-dialog>

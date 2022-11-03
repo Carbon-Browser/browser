@@ -1,0 +1,34 @@
+import("//build/config/android/rules.gni")
+
+java_prebuilt("amplitude_java") {
+  jar_path = "amplitude-2.23.2.jar"
+  supports_android = true
+  enable_bytecode_checks = false
+  deps = [
+      ":okhttp_java",
+      #"//third_party/android_deps:com_squareup_okhttp3_okhttp_java",
+  ]
+}
+
+java_prebuilt("okhttp_java") {
+  jar_path = "okhttp-3.10.0.jar"
+  supports_android = true
+  enable_bytecode_checks = false
+  deps = [
+      ":okio_java",
+  ]
+}
+
+java_prebuilt("okio_java") {
+  jar_path = "okio-1.14.0.jar"
+  supports_android = true
+  enable_bytecode_checks = false
+  deps = [
+      ":animal_sniffer_annotations_java",
+  ]
+}
+
+java_prebuilt("animal_sniffer_annotations_java") {
+  jar_path = "animal-sniffer-annotations-1.10.jar"
+  supports_android = true
+}

@@ -1,0 +1,110 @@
+<style include="cr-shared-style shared-style">
+  :host {
+    display: block;
+    --cr-vertical-tab-height: 33px;
+  }
+
+  #container {
+    /* Add enough space at the end for the focus outline to not be cropped. */
+    margin-inline-end: 3px;
+  }
+
+  #inner-container {
+    align-items: center;
+    cursor: pointer;
+    display: grid;
+    flex: 1;
+    grid-template-areas: 'arrow folder label';
+    grid-template-columns: 24px 24px auto;
+    min-height: 40px;
+    min-width: fit-content;
+    overflow: hidden;
+    padding-inline-start: calc(var(--node-depth, 0) * 15px + 14px);
+  }
+
+  #arrow {
+    grid-area: arrow;
+    justify-self: center;
+    margin: 0;
+    --cr-icon-button-size: 40px;
+    margin-inline-end: 10px;
+  }
+
+  #arrow:not([is-open]) {
+    transform: rotate(-90deg);
+    transition: transform 150ms;
+  }
+
+  .folder-icon {
+    grid-area: folder;
+    justify-self: center;
+  }
+
+  .menu-label {
+    color: var(--folder-inactive-color);
+    font-weight: 500;
+    grid-area: label;
+    padding: 0 6px;
+    white-space: nowrap;
+  }
+
+  :host([is-selected-folder_]) .menu-label,
+  :host([is-selected-folder_]) .folder-icon {
+    color: var(--interactive-color);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    #container.drag-on .menu-label,
+    #container.drag-on .folder-icon,
+    #container.drag-on #arrow {
+      color: var(--google-grey-refresh-700);
+    }
+  }
+
+  :host-context([dir='rtl']) #arrow:not([is-open]) {
+    transform: rotate(90deg);
+  }
+
+  #arrow[is-open] {
+    transform: initial;
+  }
+</style>
+
+<div id="container"
+    class$="cr-vertical-tab [[getContainerClass_(isSelectedFolder_)]]"
+    hidden="[[isRootFolder_(depth)]]"
+    role="treeitem"
+    aria-owns="descendants"
+    tabindex$="[[getTabIndex_(selectedFolder_, itemId)]]"
+    on-click="selectFolder_"
+    on-dblclick="toggleFolder_"
+    on-contextmenu="onContextMenu_">
+  <div id="inner-container">
+    <template is="dom-if" if="[[hasChildFolder_]]">
+      <cr-icon-button id="arrow" iron-icon="cr:arrow-drop-down"
+          on-click="toggleFolder_" on-mousedown="preventDefault_"
+          tabindex="-1" is-open$="[[isOpen]]" noink aria-hidden="true">
+      </cr-icon-button>
+    </template>
+    <div class="folder-icon"
+        open$="[[isSelectedFolder_]]"
+        no-children$="[[!hasChildFolder_]]">
+    </div>
+    <div class="menu-label" title="[[item_.title]]">
+      [[item_.title]]
+    </div>
+  </div>
+</div>
+<div id="descendants" role="group">
+  <template is="dom-if" if="[[isOpen]]">
+    <template is="dom-repeat"
+        items="[[item_.children]]"
+        as="child"
+        filter="isFolder_">
+      <bookmarks-folder-node item-id="[[child]]"
+          draggable="true"
+          depth="[[getChildDepth_(depth)]]">
+      </bookmarks-folder-node>
+    </template>
+  </template>
+</div>

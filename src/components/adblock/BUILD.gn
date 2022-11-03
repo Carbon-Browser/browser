@@ -1,0 +1,190 @@
+#
+# This file is part of Adblock Plus <https://adblockplus.org/>,
+# Copyright (C) 2006-present eyeo GmbH
+#
+# Adblock Plus is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License version 3 as
+# published by the Free Software Foundation.
+#
+# Adblock Plus is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with Adblock Plus.  If not, see <http://www.gnu.org/licenses/>.
+
+import("//build/buildflag_header.gni")
+import("//components/adblock/features.gni")
+import("//mojo/public/tools/bindings/mojom.gni")
+
+buildflag_header("buildflags") {
+  header = "buildflags.h"
+  flags = [
+    "ENABLE_BUNDLED_SUBSCRIPTIONS=$enable_bundled_subscriptions",
+  ]
+}
+
+config("adblock_config") {
+  defines = []
+  if (abp_telemetry_client_id != "") {
+    defines += [ "ABP_TELEMETRY_CLIENT_ID=\"$abp_telemetry_client_id\"" ]
+  }
+
+  if (abp_application_name != "") {
+    defines += [ "ABP_APPLICATION_NAME=\"$abp_application_name\"" ]
+  }
+
+  if (abp_application_version != "") {
+    defines += [ "ABP_APPLICATION_VERSION=\"$abp_application_version\"" ]
+  }
+}
+
+source_set("adblock") {
+  sources = [
+    "adblock_constants.cc",
+    "adblock_constants.h",
+    "adblock_controller.h",
+    "adblock_controller_impl.cc",
+    "adblock_controller_impl.h",
+    "adblock_element_hider.h",
+    "adblock_element_hider_impl.cc",
+    "adblock_element_hider_impl.h",
+    "adblock_filesystem_impl.cc",
+    "adblock_filesystem_impl.h",
+    "adblock_frame_hierarchy_builder.cc",
+    "adblock_frame_hierarchy_builder.h",
+    "adblock_logging_impl.cc",
+    "adblock_logging_impl.h",
+    "adblock_network_impl.cc",
+    "adblock_network_impl.h",
+    "adblock_platform_embedder.cc",
+    "adblock_platform_embedder.h",
+    "adblock_platform_embedder_impl.cc",
+    "adblock_platform_embedder_impl.h",
+    "adblock_prefs.cc",
+    "adblock_prefs.h",
+    "adblock_request_classifier_libabp_impl.cc",
+    "adblock_request_classifier_libabp_impl.h",
+    "adblock_request_classifier.h",
+    "adblock_resource_reader_impl.cc",
+    "adblock_resource_reader_impl.h",
+    "adblock_sitekey_storage_libabp_impl.cc",
+    "adblock_sitekey_storage_libabp_impl.h",
+    "adblock_sitekey_storage.h",
+    "adblock_state_synchronizer.cc",
+    "adblock_state_synchronizer.h",
+    "adblock_switches.cc",
+    "adblock_switches.h",
+    "adblock_timer_impl.cc",
+    "adblock_timer_impl.h",
+    "adblock_utils.cc",
+    "adblock_utils.h",
+    "adblock_webcontents_observer.cc",
+    "adblock_webcontents_observer.h",
+    "allowed_connection_type.cc",
+    "allowed_connection_type.h",
+    "sitekey.h",
+    "subscription.cc",
+    "subscription.h",
+  ]
+
+  if (abp_telemetry_client_id != "") {
+    sources += [
+      "adblock_telemetry_service.cc",
+      "adblock_telemetry_service.h",
+    ]
+  }
+
+  public_deps = [
+    ":buildflags",
+    ":interfaces",
+    "//base",
+    "//components/keyed_service/content",
+    "//components/pref_registry:pref_registry",
+    "//components/prefs:prefs",
+    "//components/resources:components_resources_grit",
+    "//components/version_info:version_info",
+    "//content/public/browser",
+    "//content/public/common",
+    "//gin:gin",
+    "//net",
+    "//services/network/public/cpp",
+    "//third_party/libadblockplus:libadblockplus_native",
+    "//url:url",
+    "//v8",
+    "//v8:v8_libplatform",
+  ]
+
+  all_dependent_configs = [
+    ":adblock_config",
+    "//third_party/libadblockplus:libadblockplus_config"
+  ]
+}
+
+source_set("test_support") {
+  testonly = true
+  sources = [
+    "fake_subscription_impl.cc",
+    "fake_subscription_impl.h",
+    "mock_adblock_controller.cc",
+    "mock_adblock_controller.h",
+    "mock_adblock_element_hider.cc",
+    "mock_adblock_element_hider.h",
+    "mock_adblock_frame_hierarchy_builder.cc",
+    "mock_adblock_frame_hierarchy_builder.h",
+    "mock_adblock_platform_embedder.cc",
+    "mock_adblock_platform_embedder.h",
+    "mock_adblock_sitekey_storage.cc",
+    "mock_adblock_sitekey_storage.h",
+    "mock_filter_engine.cc",
+    "mock_filter_engine.h",
+    "mock_filter_impl.cc",
+    "mock_filter_impl.h",
+  ]
+
+  public_deps = [
+    ":adblock",
+    "//testing/gmock",
+    "//testing/gtest",
+  ]
+}
+
+source_set("unit_tests") {
+  testonly = true
+
+  sources = [
+    "adblock_controller_impl_test.cc",
+    "adblock_filesystem_impl_test.cc",
+    "adblock_frame_hierarchy_builder_test.cc",
+    "adblock_network_impl_test.cc",
+    "adblock_platform_embedder_impl_test.cc",
+    "adblock_request_classifier_libabp_impl_test.cc",
+    "adblock_sitekey_storage_libabp_impl_test.cc",
+    "adblock_state_synchronizer_test.cc",
+    "adblock_utils_test.cc",
+    "adblock_webcontents_observer_test.cc",
+  ]
+
+  if (abp_telemetry_client_id != "") {
+    sources += [ "adblock_telemetry_service_unittest.cc" ]
+  }
+
+  deps = [
+    ":test_support",
+    "//base/test:test_support",
+    "//components/sync_preferences:test_support",
+    "//content/test:test_support",
+    "//services/network:test_support",
+  ]
+}
+
+mojom("interfaces") {
+  sources = [ "adblock.mojom" ]
+
+  public_deps = [
+    "//services/network/public/mojom",
+    "//url/mojom:url_mojom_gurl",
+  ]
+
+}

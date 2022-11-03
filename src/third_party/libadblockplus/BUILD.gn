@@ -1,0 +1,212 @@
+config("libadblockplus_config") {
+  include_dirs = [ "src/include" ]
+  cflags = [
+    "-Wno-deprecated",
+    "-Wno-deprecated-declarations",
+  ]
+}
+
+load_before_files_in = [
+  "lib/compat.js"
+]
+
+library_files_in = [
+  "lib/info.js",
+  "lib/io.js",
+  "lib/prefs.js",
+  "lib/utils.js",
+  "lib/elemHideHitRegistration.js",
+  "lib/perf_hooks.js",
+  "adblockpluscore/lib/time.js",
+  "adblockpluscore/lib/events.js",
+  "adblockpluscore/lib/caching.js",
+  "adblockpluscore/lib/profiler.js",
+  "adblockpluscore/data/publicSuffixList.json",
+  "adblockpluscore/data/subscriptions.json",
+  "adblockpluscore/data/resources.json",
+  "adblockpluscore/lib/url.js",
+  "adblockpluscore/lib/filterNotifier.js",
+  "lib/recommendations.js",
+  "adblockpluscore/lib/common.js",
+  "adblockpluscore/lib/elemHideExceptions.js",
+  "adblockpluscore/lib/contentTypes.js",
+  "adblockpluscore/lib/filterState.js",
+  "adblockpluscore/lib/filterClasses.js",
+  "adblockpluscore/lib/snippets.js",
+  "adblockpluscore/lib/analytics.js",
+  "adblockpluscore/lib/downloader.js",
+  "adblockpluscore/lib/subscriptionClasses.js",
+  "adblockpluscore/lib/iniParser.js",
+  "adblockpluscore/lib/filterStorage.js",
+  "adblockpluscore/lib/filtersByDomain.js",
+  "adblockpluscore/lib/elemHide.js",
+  "adblockpluscore/lib/elemHideEmulation.js",
+  "adblockpluscore/lib/patterns.js",
+  "adblockpluscore/lib/matcher.js",
+  "adblockpluscore/lib/filterListener.js",
+  "adblockpluscore/lib/filterEngine.js",
+  "adblockpluscore/lib/versions.js",
+  "adblockpluscore/lib/synchronizer.js",
+  "lib/filterUpdateRegistration.js",
+  "lib/compose.js",
+  "adblockpluscore/lib/jsbn.js",
+  "adblockpluscore/lib/rusha.js",
+  "adblockpluscore/lib/rsa.js",
+  "lib/init.js",
+  "lib/punycode.js",
+]
+
+load_after_files_in = [
+  "lib/api.js",
+  "lib/uri.js",
+]
+
+all_js_files = load_before_files_in + library_files_in + load_after_files_in
+
+action("convert_js") {
+  project_dir = "//third_party/libadblockplus/src"
+  script = "${project_dir}/convert_js.py"
+
+  library_files = []
+  foreach(file, library_files_in) {
+    library_files += [rebase_path("${project_dir}/${file}")]
+  }
+
+  load_before_files = []
+  foreach(file, load_before_files_in) {
+    load_before_files += [rebase_path("${project_dir}/${file}")]
+  }
+
+  load_after_files = []
+  foreach(file, load_after_files_in) {
+    load_after_files += [rebase_path("${project_dir}/${file}")]
+  }
+
+  inputs = library_files + load_before_files + load_after_files
+
+  outputs = [
+    "${target_gen_dir}/adblockplus.js.cpp"
+  ]
+
+  outputs_args = []
+  foreach(file, outputs) {
+    outputs_args += [rebase_path(file)]
+  }
+
+  args = outputs_args +
+    ["--before" ] + load_before_files +
+    ["--convert" ] + library_files +
+    ["--after" ] + load_after_files
+}
+
+source_set("libadblockplus_native") {
+  lib_headers_in = [
+    "AppInfo.h",
+    "Filter.h",
+    "FilterEngineFactory.h",
+    "IElement.h",
+    "IExecutor.h",
+    "IFileSystem.h",
+    "IFilterEngine.h",
+    "IFilterImplementation.h",
+    "IResourceReader.h",
+    "ISubscriptionImplementation.h",
+    "ITimer.h",
+    "IV8IsolateProvider.h",
+    "IWebRequest.h",
+    "JsValue.h",
+    "LogSystem.h",
+    "Platform.h",
+    "PlatformFactory.h",
+    "ReferrerMapping.h",
+    "Subscription.h",
+  ]
+  lib_headers = []
+  foreach(file, lib_headers_in) {
+    lib_headers += ["src/include/AdblockPlus/${file}"]
+  }
+
+  sources_in = [
+    "ActiveObject.cpp",
+    "ActiveObject.h",
+    "AppInfoJsObject.cpp",
+    "AppInfoJsObject.h",
+    "AsyncExecutor.cpp",
+    "AsyncExecutor.h",
+    "ConsoleJsObject.cpp",
+    "ConsoleJsObject.h",
+    "DefaultFileSystem.cpp",
+    "DefaultFileSystem.h",
+    "DefaultFilterEngine.cpp",
+    "DefaultFilterEngine.h",
+    "DefaultFilterImplementation.cpp",
+    "DefaultFilterImplementation.h",
+    "DefaultLogSystem.cpp",
+    "DefaultLogSystem.h",
+    "DefaultPlatform.cpp",
+    "DefaultPlatform.h",
+    "DefaultResourceReader.cpp",
+    "DefaultResourceReader.h",
+    "DefaultSubscriptionImplementation.cpp",
+    "DefaultSubscriptionImplementation.h",
+    "DefaultTimer.cpp",
+    "DefaultTimer.h",
+    "DefaultWebRequest.cpp",
+    "DefaultWebRequest.h",
+    "ElementUtils.cpp",
+    "ElementUtils.h",
+    "FileSystemJsObject.cpp",
+    "FileSystemJsObject.h",
+    "Filter.cpp",
+    "FilterEngineFactory.cpp",
+    "GlobalJsObject.cpp",
+    "GlobalJsObject.h",
+    "IFilterEngine.cpp",
+    "JsContext.cpp",
+    "JsContext.h",
+    "JsEngine.cpp",
+    "JsEngine.h",
+    "JsError.cpp",
+    "JsError.h",
+    "JsValue.cpp",
+    "PlatformFactory.cpp",
+    "ReferrerMapping.cpp",
+    "ResourceReaderJsObject.cpp",
+    "ResourceReaderJsObject.h",
+    "Subscription.cpp",
+    "SynchronizedCollection.h",
+    "Thread.cpp",
+    "Thread.h",
+    "Utils.cpp",
+    "Utils.h",
+    "WebRequestJsObject.cpp",
+    "WebRequestJsObject.h",
+  ]
+
+  sources = lib_headers + get_target_outputs(":convert_js")
+  foreach(file, sources_in) {
+    sources += ["src/src/${file}"]
+  }
+
+  deps = [":convert_js"]
+
+  configs -= [ "//build/config/compiler:no_rtti" ]
+  configs += [ "//build/config/compiler:rtti" ]
+  configs += [ "//build/config/compiler:exceptions" ]
+
+  public_configs = [ ":libadblockplus_config" ]
+
+  public_deps = [
+    "//v8",
+    "//v8:v8_libplatform",
+  ]
+
+  formated_all_js_files = ""
+  foreach(file, all_js_files) {
+    if (formated_all_js_files != "") {
+      formated_all_js_files += " "
+    }
+    formated_all_js_files += file
+  }
+  defines = [ "ABP_SCRIPT_FILES=\"$formated_all_js_files\"" ]
+}

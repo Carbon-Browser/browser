@@ -1,0 +1,61 @@
+# Copyright 2018 The Chromium Authors. All rights reserved.
+# Use of this source code is governed by a BSD-style license that can be
+# found in the LICENSE file.
+
+static_library("cpp") {
+  sources = [
+    "controller.cc",
+    "controller.h",
+    "merge_samples.cc",
+    "merge_samples.h",
+    "profiling_client.cc",
+    "profiling_client.h",
+    "settings.cc",
+    "settings.h",
+    "switches.cc",
+    "switches.h",
+  ]
+
+  public_deps = [
+    "//base",
+    "//components/services/heap_profiling/public/mojom",
+    "//mojo/public/cpp/bindings",
+  ]
+
+  deps = [
+    "//base:debugging_buildflags",
+    "//base/allocator:buildflags",
+  ]
+
+  if (!is_ios) {
+    sources += [
+      "heap_profiling_trace_source.cc",
+      "heap_profiling_trace_source.h",
+    ]
+    deps += [ "//services/tracing/public/cpp:cpp" ]
+  }
+}
+
+source_set("unit_tests") {
+  testonly = true
+  sources = [
+    "merge_samples_unittests.cc",
+    "switches_unittest.cc",
+  ]
+  deps = [
+    ":cpp",
+    "//base",
+    "//base/allocator:buildflags",
+    "//base/test:test_support",
+    "//testing/gtest",
+  ]
+  if (!is_ios) {
+    sources += [ "heap_profiling_trace_source_unittest.cc" ]
+    deps += [
+      "//services/tracing:test_utils",
+      "//services/tracing/public/cpp:cpp",
+      "//third_party/perfetto/protos/perfetto/trace:lite",
+      "//third_party/perfetto/protos/perfetto/trace/profiling:lite",
+    ]
+  }
+}

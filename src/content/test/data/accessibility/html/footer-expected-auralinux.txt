@@ -1,0 +1,3 @@
+[document web]
+++[landmark]
+++++[static] name='Footer element'

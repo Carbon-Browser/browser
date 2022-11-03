@@ -1,0 +1,27 @@
+# If changed, go to https://sequencediagram.org/ to regenerate diagram
+title ABP Chromium element hiding flow
+
+participant AdblockWebContentObserver (UI Thread)
+participant AdblockElementHider (UI thread)
+participant ABP thread
+participant libadblockplus
+participant RenderFrameHost (UI thread)
+
+[ -> AdblockWebContentObserver (UI Thread): DidFinishLoad(RenderFrameHost*)
+AdblockWebContentObserver (UI Thread) -> AdblockElementHider (UI thread): ApplyElementHidingEmulationOnPage()
+AdblockElementHider (UI thread) ->(2) ABP thread: PrepareElemhideEmulationData()
+ABP thread -> libadblockplus: IsContentAllowlisted()
+libadblockplus --> ABP thread:
+opt if content not allowlisted
+ABP thread -> libadblockplus: GetElementHidingStyleSheet()
+libadblockplus --> ABP thread:
+ABP thread -> libadblockplus: GetElementHidingEmulationSelectors()
+libadblockplus --> ABP thread:
+ABP thread -> libadblockplus: GetSnippetScript()
+libadblockplus --> ABP thread:
+end
+ABP thread -->(2) AdblockElementHider (UI thread): InsertUserCSSAndApplyElemHidingEmuJS()
+AdblockElementHider (UI thread) ->RenderFrameHost (UI thread): InsertUserStylesheet()
+AdblockElementHider (UI thread) ->RenderFrameHost (UI thread): ExecuteJavaScriptInIsolatedWorld()
+note over AdblockWebContentObserver (UI Thread): used just to record a trace event
+AdblockElementHider (UI thread) -> AdblockWebContentObserver (UI Thread): on_finished.Run()

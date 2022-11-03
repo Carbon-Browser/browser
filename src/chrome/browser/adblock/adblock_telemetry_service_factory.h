@@ -1,0 +1,52 @@
+/*
+ * This file is part of Adblock Plus <https://adblockplus.org/>,
+ * Copyright (C) 2006-present eyeo GmbH
+ *
+ * Adblock Plus is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 3 as
+ * published by the Free Software Foundation.
+ *
+ * Adblock Plus is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Adblock Plus.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+#ifndef CHROME_BROWSER_ADBLOCK_ADBLOCK_TELEMETRY_SERVICE_FACTORY_H_
+#define CHROME_BROWSER_ADBLOCK_ADBLOCK_TELEMETRY_SERVICE_FACTORY_H_
+
+#include "base/no_destructor.h"
+#include "components/keyed_service/content/browser_context_keyed_service_factory.h"
+
+class Profile;
+
+namespace adblock {
+class AdblockTelemetryService;
+class AdblockTelemetryServiceFactory
+    : public BrowserContextKeyedServiceFactory {
+ public:
+  static AdblockTelemetryService* GetForProfile(Profile* profile);
+  static AdblockTelemetryServiceFactory* GetInstance();
+
+ private:
+  friend class base::NoDestructor<AdblockTelemetryServiceFactory>;
+  AdblockTelemetryServiceFactory();
+  ~AdblockTelemetryServiceFactory() override;
+
+  // BrowserContextKeyedServiceFactory:
+  KeyedService* BuildServiceInstanceFor(
+      content::BrowserContext* context) const override;
+  content::BrowserContext* GetBrowserContextToUse(
+      content::BrowserContext* context) const override;
+  bool ServiceIsNULLWhileTesting() const override;
+  void RegisterProfilePrefs(
+      user_prefs::PrefRegistrySyncable* registry) override;
+  bool ServiceIsCreatedWithBrowserContext() const override;
+};
+
+}  // namespace adblock
+
+#endif  // CHROME_BROWSER_ADBLOCK_ADBLOCK_TELEMETRY_SERVICE_FACTORY_H_

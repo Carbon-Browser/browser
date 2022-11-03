@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<grit-part>
+    <if expr="enable_bundled_subscriptions">
+        <include name="IDR_ADBLOCK_BUNDLED_EASYLIST" file="adblocking\easylist.txt" type="BINDATA" compress="gzip" />
+        <include name="IDR_ADBLOCK_BUNDLED_EXCEPTIONRULES" file="adblocking\exceptionrules.txt" type="BINDATA" compress="gzip" />
+    </if>
+    <include name="IDR_ADBLOCK_ELEMHIDE_JS" file="../../third_party/libadblockplus/grit/resources/elemhide.js" type="BINDATA" />
+    <include name="IDR_ADBLOCK_ELEMHIDE_FOR_SELECTOR_JS" file="../../third_party/libadblockplus/grit/resources/elemhide_for_selector.jst" type="BINDATA" />
+    <include name="IDR_ADBLOCK_ELEMHIDE_EMU_JS" file="../../third_party/libadblockplus/grit/resources/elemhideemu.jst" type="BINDATA" />
+    <include name="IDR_ADBLOCK_SNIPPETS_JS" file="../../third_party/libadblockplus/grit/resources/snippets.js" type="BINDATA" />
+</grit-part>

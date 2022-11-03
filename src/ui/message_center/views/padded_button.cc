@@ -1,0 +1,61 @@
+// Copyright 2013 The Chromium Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
+#include "ui/message_center/views/padded_button.h"
+
+#include <memory>
+
+#include "build/chromeos_buildflags.h"
+#include "third_party/skia/include/core/SkColor.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/gfx/canvas.h"
+#include "ui/gfx/color_utils.h"
+#include "ui/message_center/public/cpp/message_center_constants.h"
+#include "ui/native_theme/native_theme.h"
+#include "ui/views/animation/ink_drop.h"
+#include "ui/views/animation/ink_drop_host_view.h"
+#include "ui/views/animation/ink_drop_impl.h"
+#include "ui/views/background.h"
+#include "ui/views/border.h"
+#include "ui/views/controls/button/image_button.h"
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+#include "ash/constants/ash_features.h"
+#endif
+
+namespace message_center {
+
+PaddedButton::PaddedButton(PressedCallback callback)
+    : views::ImageButton(std::move(callback)) {
+  SetBorder(views::CreateEmptyBorder(gfx::Insets(kControlButtonBorderSize)));
+  SetAnimateOnStateChange(false);
+
+  views::InkDrop::Get(this)->SetMode(views::InkDropHost::InkDropMode::ON);
+  views::InkDrop::Get(this)->SetVisibleOpacity(0.12f);
+  SetHasInkDropActionOnClick(true);
+  views::InkDrop::UseInkDropForSquareRipple(views::InkDrop::Get(this),
+                                            /*highlight_on_hover=*/false);
+}
+
+void PaddedButton::OnThemeChanged() {
+  ImageButton::OnThemeChanged();
+  auto* theme = GetNativeTheme();
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  SkColor background_color = theme->GetSystemColor(
+      ui::NativeTheme::kColorId_NotificationButtonBackground);
+  if (ash::features::IsDarkLightModeEnabled())
+    background_color = SK_ColorTRANSPARENT;
+  SetBackground(views::CreateSolidBackground(background_color));
+#else
+  SkColor background_color =
+      theme->GetSystemColor(ui::NativeTheme::kColorId_WindowBackground);
+#endif
+  views::InkDrop::Get(this)->SetBaseColor(
+      color_utils::GetColorWithMaxContrast(background_color));
+}
+
+BEGIN_METADATA(PaddedButton, views::ImageButton)
+END_METADATA
+
+}  // namespace message_center

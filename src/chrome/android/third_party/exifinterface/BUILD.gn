@@ -1,0 +1,10 @@
+import("//build/config/android/rules.gni")
+import("//build/config/android/rules.gni")
+
+android_aar_prebuilt("exifinterface_java") {
+  aar_path = "exifinterface-1.0.0.aar"
+  info_path ="androidx_exifinterface.info"
+  deps = [
+    "//third_party/androidx:androidx_annotation_annotation_java",
+  ]
+}

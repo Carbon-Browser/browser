@@ -1,0 +1,311 @@
+<?xml version="1.0" ?>
+<!DOCTYPE translationbundle>
+<translationbundle lang="th">
+<translation id="1001534784610492198">การเก็บข้อมูลของโปรแกรมติดตั้งเสียหายหรือไม่ถูกต้อง โปรดดาวน์โหลด Carbon Browser Browser Browser Browser Browser Browser อีกครั้ง</translation>
+<translation id="102763973188675173">ปรับแต่งและควบคุม Carbon Browser Browser Browser Browser Browser Browser มีการอัปเดต</translation>
+<translation id="1051826050538111504">มีซอฟต์แวร์อันตรายในคอมพิวเตอร์ของคุณ Carbon Browser Browser Browser Browser Browser Browser ช่วยนำซอฟต์แวร์ดังกล่าวออก คืนการตั้งค่า และปิดใช้ส่วนขยายให้คุณได้ เพื่อให้เบราว์เซอร์กลับมาทำงานเป็นปกติอีกครั้ง</translation>
+<translation id="1065672644894730302">ค่ากำหนดของคุณไม่สามารถอ่านได้ ฟีเจอร์บางอย่างอาจใช้ไม่ได้และการเปลี่ยนแปลงค่ากำหนดจะไม่ได้รับการบันทึก</translation>
+<translation id="1088300314857992706"><ph name="USER_EMAIL_ADDRESS" /> ใช้ Carbon Browser Browser Browser Browser Browser Browser อยู่ก่อนหน้านี้</translation>
+<translation id="110877069173485804">นี่คือ Carbon Browser Browser Browser Browser Browser Browser ของคุณ</translation>
+<translation id="1125124144982679672">ใครกำลังใช้ Carbon Browser Browser Browser Browser Browser Browser อยู่</translation>
+<translation id="1142745911746664600">อัปเดต Carbon Browser Browser Browser Browser Browser Browser ไม่ได้</translation>
+<translation id="1154147086299354128">เ&amp;ปิดใน Carbon Browser Browser Browser Browser Browser Browser</translation>
+<translation id="1182414570724401860">Carbon Browser Browser Browser Browser Browser Browser แนะนำว่าอย่าดาวน์โหลดหรือเปิดไฟล์นี้</translation>
+<translation id="1278833599417554002">เปิดอีกครั้งเพื่ออัปเดต Carbon Browser Browser Browser Browser Browser Browser</translation>
+<translation id="1293325835983155583"><ph name="MANAGER" /> กำหนดว่าคุณต้องอ่านและยอมรับข้อกำหนดในการให้บริการต่อไปนี้ก่อนใช้อุปกรณ์นี้ ข้อกำหนดเหล่านี้ไม่ขยาย แก้ไข หรือจำกัดข้อกำหนดของ Google Chrome OS</translation>
+<translation id="1302523850133262269">โปรดรอขณะที่ Carbon Browser Browser Browser Browser Browser Browser ติดตั้งการอัปเดตระบบล่าสุด</translation>
+<translation id="137466361146087520">Carbon Browser Browser Browser Browser Browser Browser เบต้า</translation>
+<translation id="1399397803214730675">คอมพิวเตอร์เครื่องนี้มี Carbon Browser Browser Browser Browser Browser Browser รุ่นใหม่กว่าแล้ว หากซอฟต์แวร์ไม่ทำงาน โปรดถอนการติดตั้ง Carbon Browser Browser Browser Browser Browser Browser แล้วลองใหม่อีกครั้ง</translation>
+<translation id="1434626383986940139">แอป Carbon Browser Browser Browser Browser Browser Browser Canary</translation>
+<translation id="1507198376417198979">ปรับแต่งโปรไฟล์ Carbon Browser Browser Browser Browser Browser Browser ใหม่</translation>
+<translation id="1516530951338665275">Carbon Browser Browser Browser Browser Browser Browser ต้องการสิทธิ์เข้าถึงบลูทูธเพื่อจับคู่ต่อ <ph name="IDS_BLUETOOTH_DEVICE_CHOOSER_AUTHORIZE_BLUETOOTH_LINK" /></translation>
+<translation id="1553358976309200471">อัปเดต Carbon Browser Browser Browser Browser Browser Browser</translation>
+<translation id="1583073672411044740"><ph name="EXISTING_USER" /> ลงชื่อเข้าใช้โปรไฟล์ Carbon Browser Browser Browser Browser Browser Browser นี้แล้ว การดำเนินการนี้จะสร้างโปรไฟล์ Carbon Browser Browser Browser Browser Browser Browser ใหม่สำหรับ <ph name="USER_EMAIL_ADDRESS" /></translation>
+<translation id="1587223624401073077">Carbon Browser Browser Browser Browser Browser Browser ใช้กล้องของคุณอยู่</translation>
+<translation id="1587325591171447154"><ph name="FILE_NAME" /> เป็นอันตราย Carbon Browser Browser Browser Browser Browser Browser จึงบล็อกไว้</translation>
+<translation id="1597911401261118146"><ph name="BEGIN_LINK" />ลงชื่อเข้าใช้ Carbon Browser Browser Browser Browser Browser Browser<ph name="END_LINK" /> เพื่อตรวจสอบว่ารหัสผ่านของคุณไม่ได้รับผลกระทบจากการละเมิดข้อมูลและปัญหาด้านความปลอดภัยอื่นๆ</translation>
+<translation id="1619887657840448962">เพื่อให้ Carbon Browser Browser Browser Browser Browser Browser ปลอดภัยขึ้น เราได้ปิดส่วนขยายต่อไปนี้ซึ่งไม่ได้แสดงอยู่ใน <ph name="IDS_EXTENSION_WEB_STORE_TITLE" /> และอาจมีการเพิ่มเข้ามาโดยที่คุณไม่รู้ตัว</translation>
+<translation id="1628000112320670027">รับความช่วยเหลือเกี่ยวกับ Carbon Browser Browser Browser Browser Browser Browser</translation>
+<translation id="1674870198290878346">เปิดลิงก์ในหน้าต่างที่ไม่ระบุตัวตนของ Carbon Browser Browser Browser Browser Browser Browser</translation>
+<translation id="1682634494516646069">Carbon Browser Browser Browser Browser Browser Browser ไม่สามารถอ่านและเขียนข้อมูลในไดเรกทอรีข้อมูล: <ph name="USER_DATA_DIRECTORY" /></translation>
+<translation id="1698376642261615901">Carbon Browser Browser Browser Browser Browser Browser คือเว็บเบราว์เซอร์ที่แสดงหน้าเว็บและแอปพลิเคชันต่างๆ ได้รวดเร็วในพริบตา โดยทำงานได้เร็ว มีเสถียรภาพ และใช้งานง่าย ช่วยให้คุณเรียกดูเว็บได้อย่างปลอดภัยมากขึ้นด้วยการป้องกันมัลแวร์และฟิชชิงซึ่งมีอยู่ใน Carbon Browser Browser Browser Browser Browser Browser</translation>
+<translation id="1713301662689114961">{0,plural, =1{Carbon Browser Browser Browser Browser Browser Browser จะเปิดขึ้นมาใหม่ใน 1 ชั่วโมง}other{Carbon Browser Browser Browser Browser Browser Browser จะเปิดขึ้นมาใหม่ใน # ชั่วโมง}}</translation>
+<translation id="1734234790201236882">Carbon Browser Browser Browser Browser Browser Browser จะบันทึกรหัสผ่านนี้ในบัญชี Google คุณจะได้ไม่ต้องจำรหัสผ่านเอง</translation>
+<translation id="174539241580958092">Carbon Browser Browser Browser Browser Browser Browser ไม่สามารถซิงค์ข้อมูลของคุณเนื่องจากเกิดข้อผิดพลาดในการลงชื่อเข้าใช้</translation>
+<translation id="1759842336958782510">Carbon Browser Browser Browser Browser Browser Browser</translation>
+<translation id="1786003790898721085">ตรวจสอบว่าคุณลงชื่อเข้าใช้ Carbon Browser Browser Browser Browser Browser Browser ใน <ph name="TARGET_DEVICE_NAME" /> แล้วลองส่งอีกครั้ง</translation>
+<translation id="1810203443153428607">การติดตั้ง Chrome OS จะเขียนทับข้อมูลทั้งหมดในอุปกรณ์</translation>
+<translation id="1812689907177901597">เมื่อปิดการตั้งค่านี้ คุณจะลงชื่อเข้าใช้เว็บไซต์ของ Google อย่างเช่น Gmail ได้โดยไม่ต้องลงชื่อเข้าใช้ Carbon Browser Browser Browser Browser Browser Browser</translation>
+<translation id="1860536484129686729">Carbon Browser Browser Browser Browser Browser Browser ต้องการสิทธิ์เข้าถึงกล้องถ่ายรูปของคุณสำหรับเว็บไซต์นี้</translation>
+<translation id="1873233029667955273">Carbon Browser Browser Browser Browser Browser Browser ไม่ใช่เบราว์เซอร์เริ่มต้น</translation>
+<translation id="1874309113135274312">Carbon Browser Browser Browser Browser Browser Browser เบต้า (mDNS-In)</translation>
+<translation id="1877026089748256423">Carbon Browser Browser Browser Browser Browser Browser ล้าสมัย</translation>
+<translation id="1919130412786645364">อนุญาตให้ลงชื่อเข้าใช้ Carbon Browser Browser Browser Browser Browser Browser</translation>
+<translation id="2018528049276128029">แต่ละโปรไฟล์จะเก็บข้อมูล Carbon Browser Browser Browser Browser Browser Browser ของตัวเอง เช่น บุ๊กมาร์ก ประวัติการเข้าชม รหัสผ่าน และอื่นๆ</translation>
+<translation id="2063848847527508675">ต้องรีสตาร์ท Chrome OS เพื่อใช้การอัปเดต</translation>
+<translation id="2094919256425865063">ปิด Carbon Browser Browser Browser Browser Browser Browser ใช่ไหม</translation>
+<translation id="2120620239521071941">การดำเนินการนี้จะลบ <ph name="ITEMS_COUNT" /> รายการออกจากอุปกรณ์นี้ หากต้องการดึงข้อมูลภายหลัง ให้ลงชื่อเข้าใช้ Carbon Browser Browser Browser Browser Browser Browser ด้วย <ph name="USER_EMAIL" /></translation>
+<translation id="2121284319307530122">เปิดอีกครั้งเพื่ออัปเดต Carbon Browser Browser Browser Browser Browser Browser</translation>
+<translation id="2123055963409958220">ช่วยให้ Carbon Browser Browser Browser Browser Browser Browser ดียิ่งขึ้นด้วยการรายงาน<ph name="BEGIN_LINK" />การตั้งค่าปัจจุบัน<ph name="END_LINK" /></translation>
+<translation id="2151406531797534936">โปรดรีสตาร์ท Carbon Browser Browser Browser Browser Browser Browser ตอนนี้เลย</translation>
+<translation id="2246246234298806438">Carbon Browser Browser Browser Browser Browser Browser ไม่สามารถแสดงหน้าตัวอย่างก่อนพิมพ์หากไม่มีโปรแกรมดู PDF ในตัว</translation>
+<translation id="2290014774651636340">คีย์ API ของ Google หายไป การทำงานบางอย่างของ Carbon Browser Browser Browser Browser Browser Browser จะถูกปิดใช้งาน</translation>
+<translation id="2290095356545025170">คุณแน่ใจหรือไม่ว่าต้องการยกเลิกการติดตั้ง Carbon Browser Browser Browser Browser Browser Browser</translation>
+<translation id="2309047409763057870">นี่เป็นการติดตั้ง Carbon Browser Browser Browser Browser Browser Browser แบบสำรอง และไม่สามารถใช้เป็นเบราว์เซอร์เริ่มต้นของคุณ</translation>
+<translation id="2345992953227471816">Carbon Browser Browser Browser Browser Browser Browser พบว่าส่วนขยายเหล่านี้มีมัลแวร์</translation>
+<translation id="2348335408836342058">Carbon Browser Browser Browser Browser Browser Browser ต้องการสิทธิ์เข้าถึงไมโครโฟนและกล้องถ่ายรูปของคุณสำหรับเว็บไซต์นี้</translation>
+<translation id="234869673307233423">Carbon Browser Browser Browser Browser Browser Browser ตรวจสอบรหัสผ่านของคุณไม่ได้ โปรดลองอีกครั้งภายหลัง</translation>
+<translation id="235650106824528204">ผู้ดูแลโปรไฟล์งานนำข้อมูล Carbon Browser Browser Browser Browser Browser Browser ที่สร้างขึ้นในช่วงที่มีการใช้โปรไฟล์นี้ออกได้ (เช่น การสร้างบุ๊กมาร์ก ประวัติการเข้าชม รหัสผ่าน และการตั้งค่าอื่นๆ) <ph name="LEARN_MORE" /></translation>
+<translation id="2429317896000329049">Carbon Browser Browser Browser Browser Browser Browser ไม่สามารถซิงค์ข้อมูลของคุณเนื่องจากไม่สามารถใช้การซิงค์กับโดเมนของคุณ</translation>
+<translation id="2467438592969358367">Carbon Browser Browser Browser Browser Browser Browser ต้องการส่งออกรหัสผ่านของคุณ พิมพ์รหัสผ่าน Windows เพื่ออนุญาตให้ดำเนินการ</translation>
+<translation id="2485422356828889247">ถอนการติดตั้ง</translation>
+<translation id="2518751521812750372">เมื่อคุณปิด Carbon Browser Browser Browser Browser Browser Browser เบราว์เซอร์นี้จะล้างคุกกี้และข้อมูลเว็บไซต์จากหน้าที่คุณเข้าชม</translation>
+<translation id="2534507159460261402">Google Pay (คัดลอกไปยัง Carbon Browser Browser Browser Browser Browser Browser)</translation>
+<translation id="2574930892358684005"><ph name="EXISTING_USER" /> ลงชื่อเข้าใช้โปรไฟล์ Carbon Browser Browser Browser Browser Browser Browser นี้แล้ว หากต้องการแยกการท่องเว็บของคุณไว้ต่างหาก Carbon Browser Browser Browser Browser Browser Browser สร้างโปรไฟล์ให้คุณโดยเฉพาะได้</translation>
+<translation id="2580411288591421699">ไม่สามารถติดตั้ง Carbon Browser Browser Browser Browser Browser Browser รุ่นเดียวกับที่กำลังเรียกใช้อยู่ได้ โปรดปิด Carbon Browser Browser Browser Browser Browser Browser แล้วลองใหม่อีกครั้ง</translation>
+<translation id="2586406160782125153">การดำเนินการนี้จะลบข้อมูลการท่องเว็บออกจากอุปกรณ์นี้ หากต้องการดึงข้อมูลภายหลัง ให้ลงชื่อเข้าใช้ Carbon Browser Browser Browser Browser Browser Browser ด้วย <ph name="USER_EMAIL" /></translation>
+<translation id="2622559029861875898">Carbon Browser Browser Browser Browser Browser Browser ตรวจหาอัปเดตไม่ได้ โปรดลองตรวจสอบการเชื่อมต่ออินเทอร์เน็ต</translation>
+<translation id="2644798301485385923">ระบบ Chrome OS</translation>
+<translation id="2652691236519827073">เปิดลิงก์ใน Carbon Browser Browser Browser Browser Browser Browser แท็บใหม่</translation>
+<translation id="2665296953892887393">ช่วยทำให้ Carbon Browser Browser Browser Browser Browser Browser ดียิ่งขึ้นโดยการส่งรายงานข้อขัดข้องและ <ph name="UMA_LINK" /> ไปยัง Google</translation>
+<translation id="2689103672227170538">ส่วนขยายนี้ได้เปลี่ยนหน้าที่จะแสดงเมื่อคุณเริ่มต้น Carbon Browser Browser Browser Browser Browser Browser</translation>
+<translation id="2742320827292110288">คำเตือน: Carbon Browser Browser Browser Browser Browser Browser ไม่สามารถป้องกันไม่ให้ส่วนขยายบันทึกประวัติการท่องเว็บ หากต้องการปิดใช้ส่วนขยายนี้ในโหมดไม่ระบุตัวตน ให้ยกเลิกการเลือกตัวเลือกนี้</translation>
+<translation id="2765403129283291972">Carbon Browser Browser Browser Browser Browser Browser ต้องการสิทธิ์เข้าถึงไมโครโฟนของคุณสำหรับเว็บไซต์นี้</translation>
+<translation id="2770231113462710648">เปลี่ยนเบราว์เซอร์ที่เป็นค่าเริ่มต้นเป็น:</translation>
+<translation id="2775140325783767197">Carbon Browser Browser Browser Browser Browser Browser ตรวจสอบรหัสผ่านของคุณไม่ได้ โปรดลองตรวจสอบการเชื่อมต่ออินเทอร์เน็ต</translation>
+<translation id="2799223571221894425">เปิดใหม่</translation>
+<translation id="2847461019998147611">แสดง Carbon Browser Browser Browser Browser Browser Browser ในภาษานี้</translation>
+<translation id="2857540653560290388">กำลังเปิด Carbon Browser Browser Browser Browser Browser Browser...</translation>
+<translation id="2857972467023607093">มีโปรไฟล์ Carbon Browser Browser Browser Browser Browser Browser ที่ใช้บัญชีนี้อยู่แล้ว</translation>
+<translation id="2861074815332034794">กำลังอัปเดต Carbon Browser Browser Browser Browser Browser Browser (<ph name="PROGRESS_PERCENT" />)</translation>
+<translation id="2871893339301912279">คุณได้ลงชื่อเข้าใช้ Carbon Browser Browser Browser Browser Browser Browser แล้ว!</translation>
+<translation id="2885378588091291677">ตัวจัดการงาน</translation>
+<translation id="2888126860611144412">เกี่ยวกับ Carbon Browser Browser Browser Browser Browser Browser</translation>
+<translation id="2926676257163822632">รหัสผ่านที่ไม่รัดกุมนั้นคาดเดาได้ง่าย ให้ Carbon Browser Browser Browser Browser Browser Browser <ph name="BEGIN_LINK" />สร้างและจดจำรหัสผ่านที่รัดกุมให้คุณ<ph name="END_LINK" /></translation>
+<translation id="2926952073016206995">Carbon Browser Browser Browser Browser Browser Browser ต้องการสิทธิ์เข้าถึงกล้องสำหรับเว็บไซต์นี้</translation>
+<translation id="2929907241665500097">Carbon Browser Browser Browser Browser Browser Browser ไม่ได้อัปเดตเนื่องจากเกิดข้อผิดพลาด <ph name="BEGIN_LINK" />โปรดแก้ปัญหาการอัปเดต Carbon Browser Browser Browser Browser Browser Browser และการอัปเดตที่ไม่สำเร็จ<ph name="END_LINK" /></translation>
+<translation id="2944515913673001130"><ph name="BEGIN_PARAGRAPH1" />การช่วยเตือนครั้งสุดท้าย: การติดตั้ง<ph name="BEGIN_BOLD" />จะลบฮาร์ดไดรฟ์ทั้งหมด<ph name="END_BOLD" /> โปรดตรวจสอบว่าคุณสำรองข้อมูลที่สำคัญแล้ว<ph name="END_PARAGRAPH1" />
+          <ph name="BEGIN_PARAGRAPH2" />เมื่อเริ่มการติดตั้งแล้วจะยกเลิกไม่ได้<ph name="END_PARAGRAPH2" /></translation>
+<translation id="2969728957078202736"><ph name="PAGE_TITLE" /> - หน้าลงชื่อเข้าใช้ของเครือข่าย - Carbon Browser Browser Browser Browser Browser Browser</translation>
+<translation id="3037838751736561277">Carbon Browser Browser Browser Browser Browser Browser กำลังอยู่ในโหมดทำงานในพื้นหลัง</translation>
+<translation id="3059710691562604940">Google Safe Browsing ปิดอยู่ Carbon Browser Browser Browser Browser Browser Browser ขอแนะนำให้เปิด</translation>
+<translation id="3065168410429928842">แท็บ Carbon Browser Browser Browser Browser Browser Browser</translation>
+<translation id="3080151273017101988">เรียกใช้แอปพลิเคชันเบื้องหลังต่อไปเมื่อ Carbon Browser Browser Browser Browser Browser Browser ถูกปิดลง</translation>
+<translation id="3089968997497233615">Carbon Browser Browser Browser Browser Browser Browser มีรุ่นใหม่ที่ปลอดภัยกว่าให้ใช้งานแล้ว</translation>
+<translation id="3100998948628680988">ตั้งชื่อโปรไฟล์ Carbon Browser Browser Browser Browser Browser Browser ของคุณ</translation>
+<translation id="3114643501466072395"><ph name="BEGIN_LINK" />ลงชื่อเข้าใช้ Carbon Browser Browser Browser Browser Browser Browser<ph name="END_LINK" /> เพื่อตรวจสอบว่ารหัสผ่านรายการอื่นไม่ได้รับผลกระทบจากการละเมิดข้อมูลและปัญหาด้านความปลอดภัยอื่นๆ</translation>
+<translation id="3140883423282498090">การเปลี่ยนแปลงของคุณจะมีผลในครั้งถัดไปที่คุณเปิด Carbon Browser Browser Browser Browser Browser Browser</translation>
+<translation id="3149510190863420837">แอป Carbon Browser Browser Browser Browser Browser Browser</translation>
+<translation id="3360895254066713204">ตัวช่วยเหลือของ Carbon Browser Browser Browser Browser Browser Browser</translation>
+<translation id="3379938682270551431">{0,plural, =0{Carbon Browser Browser Browser Browser Browser Browser จะเปิดขึ้นมาใหม่ตอนนี้}=1{Carbon Browser Browser Browser Browser Browser Browser จะเปิดขึ้นมาใหม่ใน 1 วินาที}other{Carbon Browser Browser Browser Browser Browser Browser จะเปิดขึ้นมาใหม่ใน # วินาที}}</translation>
+<translation id="3395323229510056640">รับความช่วยเหลือเกี่ยวกับ Chrome OS</translation>
+<translation id="3396977131400919238">มีข้อผิดพลาดของระบบปฏิบัติการเกิดขึ้นในระหว่างการติดตั้ง โปรดดาวน์โหลด Carbon Browser Browser Browser Browser Browser Browser อีกครั้ง</translation>
+<translation id="3434246496373299699">Carbon Browser Browser Browser Browser Browser Browser จะตรวจสอบรหัสผ่านได้เมื่อคุณลงชื่อเข้าใช้ด้วยบัญชี Google</translation>
+<translation id="3451115285585441894">กำลังเพิ่มลงใน Carbon Browser Browser Browser Browser Browser Browser...</translation>
+<translation id="345171907106878721">เพิ่มตัวคุณเองใน Carbon Browser Browser Browser Browser Browser Browser</translation>
+<translation id="34857402635545079">ล้างข้อมูลจาก Carbon Browser Browser Browser Browser Browser Browser (<ph name="URL" />) ด้วย</translation>
+<translation id="3503306920980160878">Carbon Browser Browser Browser Browser Browser Browser ต้องการสิทธิ์เข้าถึงตำแหน่งของคุณเพื่อแชร์ตำแหน่งกับเว็บไซต์นี้</translation>
+<translation id="3533694711092285624">ไม่มีรหัสผ่านที่บันทึกไว้ Carbon Browser Browser Browser Browser Browser Browser จะตรวจสอบรหัสผ่านได้เมื่อคุณบันทึกรหัสผ่านไว้</translation>
+<translation id="3541482654983822893">Carbon Browser Browser Browser Browser Browser Browser ตรวจสอบรหัสผ่านของคุณไม่ได้ โปรดรอ 24 ชั่วโมงแล้วลองอีกครั้ง</translation>
+<translation id="3576528680708590453">ผู้ดูแลระบบของคุณกำหนดค่าให้ Carbon Browser Browser Browser Browser Browser Browser เปิดเบราว์เซอร์สำรองเพื่อเข้าถึง <ph name="TARGET_URL_HOSTNAME" /></translation>
+<translation id="3582972582564653026">ซิงค์และปรับเปลี่ยน Carbon Browser Browser Browser Browser Browser Browser ในอุปกรณ์ต่างๆ</translation>
+<translation id="3596080736082218006">{COUNT,plural, =0{ผู้ดูแลระบบต้องการให้คุณเปิด Carbon Browser Browser Browser Browser Browser Browser ขึ้นมาใหม่เพื่อใช้การอัปเดต}=1{ผู้ดูแลระบบต้องการให้คุณเปิด Carbon Browser Browser Browser Browser Browser Browser ขึ้นมาใหม่เพื่อใช้การอัปเดต หน้าต่างที่ไม่ระบุตัวตนจะไม่เปิดให้อีก}other{ผู้ดูแลระบบต้องการให้คุณเปิด Carbon Browser Browser Browser Browser Browser Browser ขึ้นมาใหม่เพื่อใช้การอัปเดต หน้าต่างที่ไม่ระบุตัวตนจำนวน # หน้าต่างจะไม่เปิดให้อีก}}</translation>
+<translation id="3622797965165704966">ตอนนี้การใช้ Carbon Browser Browser Browser Browser Browser Browser กับบัญชี Google ของคุณและบนคอมพิวเตอร์ที่ใช้ร่วมกันทำได้ง่ายกว่าเดิม</translation>
+<translation id="3673813398384385993">Carbon Browser Browser Browser Browser Browser Browser พบว่า "<ph name="EXTENSION_NAME" />" มีมัลแวร์</translation>
+<translation id="3718181793972440140">การดำเนินการนี้จะลบ 1 รายการออกจากอุปกรณ์นี้ หากต้องการดึงข้อมูลภายหลัง ให้ลงชื่อเข้าใช้ Carbon Browser Browser Browser Browser Browser Browser ด้วย <ph name="USER_EMAIL" /></translation>
+<translation id="3735758079232443276">ส่วนขยาย "<ph name="EXTENSION_NAME" />" ได้เปลี่ยนหน้าที่จะแสดงเมื่อคุณเริ่มต้น Carbon Browser Browser Browser Browser Browser Browser</translation>
+<translation id="3779473566290487688">คุณจะต้องใช้ OS X 10.11 ขึ้นไปเพื่อรับการอัปเดตของ Carbon Browser Browser Browser Browser Browser Browser ในอนาคต คอมพิวเตอร์เครื่องนี้ใช้ OS X 10.10</translation>
+<translation id="3780814664026482060">Carbon Browser Browser Browser Browser Browser Browser - <ph name="PAGE_TITLE" /></translation>
+<translation id="3835168907083856002">การดำเนินการนี้จะสร้างโปรไฟล์ Carbon Browser Browser Browser Browser Browser Browser ใหม่สำหรับ <ph name="USER_EMAIL_ADDRESS" /></translation>
+<translation id="386202838227397562">โปรดปิดหน้าต่าง Carbon Browser Browser Browser Browser Browser Browser ทั้งหมดและลองใหม่อีกครั้ง</translation>
+<translation id="3865754807470779944">ติดตั้ง Carbon Browser Browser Browser Browser Browser Browser เวอร์ชัน <ph name="PRODUCT_VERSION" /> ไว้แล้ว</translation>
+<translation id="3873044882194371212">เปิดลิงก์ในหน้าต่างที่ไม่ระบุตัวตนของ Carbon Browser Browser Browser Browser Browser Browser</translation>
+<translation id="3889417619312448367">ยกเลิกการติดตั้ง Carbon Browser Browser Browser Browser Browser Browser</translation>
+<translation id="4050175100176540509">การปรับปรุงด้านความปลอดภัยที่สำคัญและฟีเจอร์ใหม่ๆ พร้อมให้บริการในเวอร์ชันล่าสุด</translation>
+<translation id="4053720452172726777">กำหนดค่าและควบคุม Carbon Browser Browser Browser Browser Browser Browser</translation>
+<translation id="4110895483821904099">ตั้งค่าโปรไฟล์ Carbon Browser Browser Browser Browser Browser Browser ใหม่</translation>
+<translation id="4147555960264124640">คุณกำลังลงชื่อเข้าใช้ด้วยบัญชีที่จัดการ และให้การควบคุมระดับผู้ดูแลระบบของบัญชีดังกล่าวเหนือโปรไฟล์ Carbon Browser Browser Browser Browser Browser Browser ของคุณ ข้อมูล Carbon Browser Browser Browser Browser Browser Browser เช่น แอป บุ๊กมาร์ก ประวัติการเข้าชม รหัสผ่าน และการตั้งค่าอื่นๆ จะเชื่อมโยงอย่างถาวรกับ <ph name="USER_NAME" /> คุณจะสามารถลบข้อมูลนี้ผ่านทางแผงควบคุมบัญชี Google แต่คุณจะไม่สามารถเชื่อมโยงข้อมูลนี้กับบัญชีอื่น <ph name="LEARN_MORE" /></translation>
+<translation id="4149882025268051530">โปรแกรมติดตั้งยกเลิกการบีบอัดการเก็บข้อมูลไม่ได้ โปรดดาวน์โหลด Carbon Browser Browser Browser Browser Browser Browser อีกครั้ง</translation>
+<translation id="4191857738314598978">{0,plural, =1{เปิด Carbon Browser Browser Browser Browser Browser Browser ขึ้นมาใหม่ภายใน 1 วัน}other{เปิด Carbon Browser Browser Browser Browser Browser Browser ขึ้นมาใหม่ภายใน # วัน}}</translation>
+<translation id="4205939740494406371">Carbon Browser Browser Browser Browser Browser Browser ตรวจสอบรหัสผ่านของคุณไม่ได้ โปรดรอ 24 ชั่วโมงแล้วลองอีกครั้งหรือ<ph name="BEGIN_LINK" />ตรวจสอบรหัสผ่านในบัญชี Google<ph name="END_LINK" /></translation>
+<translation id="4242034826641750751">Carbon Browser Browser Browser Browser Browser Browser ต้องการสิทธิ์เข้าถึงกล้องและไมโครโฟนสำหรับเว็บไซต์นี้</translation>
+<translation id="424864128008805179">ต้องการออกจากระบบ Carbon Browser Browser Browser Browser Browser Browser ไหม</translation>
+<translation id="4251615635259297716">เชื่อมโยงข้อมูล Carbon Browser Browser Browser Browser Browser Browser กับบัญชีนี้ไหม</translation>
+<translation id="4281844954008187215">ข้อกำหนดในการให้บริการ</translation>
+<translation id="4293420128516039005">ลงชื่อเข้าใช้เพื่อซิงค์และปรับเปลี่ยน Carbon Browser Browser Browser Browser Browser Browser ในอุปกรณ์ต่างๆ</translation>
+<translation id="429583012151745428">อยู่ระหว่างการติดตั้ง โปรดอย่าปิดอุปกรณ์ การติดตั้งน่าจะใช้เวลาไม่เกิน 20 นาที อุปกรณ์จะปิดโดยอัตโนมัติหลังการติดตั้ง</translation>
+<translation id="4325083532956419387">เวอร์ชัน Chrome OS</translation>
+<translation id="4328355335528187361">Carbon Browser Browser Browser Browser Browser Browser Dev (mDNS-In)</translation>
+<translation id="4331809312908958774">Chrome OS</translation>
+<translation id="4335235004908507846">Carbon Browser Browser Browser Browser Browser Browser ช่วยให้คุณปลอดภัยจากการละเมิดข้อมูล ส่วนขยายที่ไม่ปลอดภัย และอื่นๆ ได้</translation>
+<translation id="4343195214584226067">เพิ่ม <ph name="EXTENSION_NAME" /> ลงใน Carbon Browser Browser Browser Browser Browser Browser แล้ว</translation>
+<translation id="4384570495110188418">Carbon Browser Browser Browser Browser Browser Browser ตรวจสอบรหัสผ่านไม่ได้เพราะคุณไม่ได้ลงชื่อเข้าใช้</translation>
+<translation id="4407807842708586359">ระบบปฏิบัติการ Carbon Browser Browser Browser Browser Browser Browser</translation>
+<translation id="4450664632294415862">Carbon Browser Browser Browser Browser Browser Browser - หน้าลงชื่อเข้าใช้ของเครือข่าย - <ph name="PAGE_TITLE" /></translation>
+<translation id="4458462641685292929">Carbon Browser Browser Browser Browser Browser Browser กำลังดำเนินการอย่างอื่นอยู่ โปรดลองอีกครั้งในภายหลัง</translation>
+<translation id="4480040274068703980">Chrome OS ไม่สามารถซิงค์ข้อมูลของคุณเนื่องจากเกิดข้อผิดพลาดในการลงชื่อเข้าใช้</translation>
+<translation id="4521185804071812304">ไม่บังคับ: ช่วยปรับปรุงฟีเจอร์และประสิทธิภาพของ Chrome OS โดยการส่งข้อมูลการวินิจฉัยและการใช้งานให้ Google โดยอัตโนมัติ</translation>
+<translation id="4561051373932531560">Carbon Browser Browser Browser Browser Browser Browser ทำให้คุณสามารถคลิกที่หมายเลขโทรศัพท์บนเว็บแล้วโทรหาด้วย Skype!</translation>
+<translation id="4567424176335768812">คุณกำลังลงชื่อเข้าใช้เป็น <ph name="USER_EMAIL_ADDRESS" /> ตอนนี้คุณสามารถเข้าถึงบุ๊กมาร์ก ประวัติการเข้าชม และการตั้งค่าอื่นๆ บนอุปกรณ์ทั้งหมดที่ลงชื่อเข้าใช้</translation>
+<translation id="4571503333518166079">ไปที่การตั้งค่าการแจ้งเตือน Carbon Browser Browser Browser Browser Browser Browser</translation>
+<translation id="459622048091363950">เมื่อ Carbon Browser Browser Browser Browser Browser Browser มีสิทธิ์การเข้าถึงแล้ว เว็บไซต์จะขอสิทธิ์การเข้าถึงจากคุณได้</translation>
+<translation id="4600710005438004015">Carbon Browser Browser Browser Browser Browser Browser อัปเดตเป็นเวอร์ชันล่าสุดไม่ได้ คุณจึงไม่ได้รับฟีเจอร์ใหม่และการแก้ไขด้านความปลอดภัย</translation>
+<translation id="4633000520311261472">เพื่อให้ Carbon Browser Browser Browser Browser Browser Browser ปลอดภัยขึ้น เราปิดส่วนขยายบางรายการที่ไม่ได้ระบุไว้ใน <ph name="IDS_EXTENSION_WEB_STORE_TITLE" /> และอาจถูกเพิ่มเข้ามาโดยที่คุณไม่รู้ตัว</translation>
+<translation id="4666328473657283332">หากต้องการเข้าถึงข้อมูล Carbon Browser Browser Browser Browser Browser Browser ในอุปกรณ์ทั้งหมด ให้ลงชื่อเข้าใช้เพื่อเปิดการซิงค์</translation>
+<translation id="4728575227883772061">การติดตั้งล้มเหลวเนื่องจากมีข้อผิดพลาดที่ไม่ได้ระบุ หาก Carbon Browser Browser Browser Browser Browser Browser ทำงานอยู่ในขณะนี้ โปรดปิดและลองอีกครั้ง</translation>
+<translation id="4754614261631455953">Carbon Browser Browser Browser Browser Browser Browser Canary (mDNS-In)</translation>
+<translation id="4771048833395599659">ไฟล์นี้อาจเป็นอันตราย Carbon Browser Browser Browser Browser Browser Browser จึงบล็อกไว้</translation>
+<translation id="479167709087336770">การดำเนินการนี้จะใช้โปรแกรมตรวจตัวสะกดแบบเดียวกับใน Google Search ข้อความที่คุณพิมพ์ในเบราว์เซอร์จะส่งไปยัง Google คุณปรับเปลี่ยนลักษณะการทำงานนี้ได้ทุกเมื่อในการตั้งค่า</translation>
+<translation id="4891791193823137474">ให้ Carbon Browser Browser Browser Browser Browser Browser ทำงานในเบื้องหลัง</translation>
+<translation id="4895437082222824641">เปิดลิงก์ใน Carbon Browser Browser Browser Browser Browser Browser แท็บใหม่</translation>
+<translation id="4953650215774548573">ตั้ง Carbon Browser Browser Browser Browser Browser Browser เป็นเบราว์เซอร์เริ่มต้นของคุณ</translation>
+<translation id="495931528404527476">ใน Carbon Browser Browser Browser Browser Browser Browser</translation>
+<translation id="4970761609246024540">ยินดีต้อนรับสู่โปรไฟล์ Carbon Browser Browser Browser Browser Browser Browser</translation>
+<translation id="4990567037958725628">Carbon Browser Browser Browser Browser Browser Browser Canary</translation>
+<translation id="5062123544085870375">รีสตาร์ท Chrome OS</translation>
+<translation id="5132929315877954718">พบกับแอป เกม ส่วนขยาย และธีมเด็ดๆ สำหรับ Carbon Browser Browser Browser Browser Browser Browser</translation>
+<translation id="5139423532931106058">ปรับแต่งโปรไฟล์ Carbon Browser Browser Browser Browser Browser Browser ของคุณ</translation>
+<translation id="5163087008893166964">ยินดีต้อนรับสู่ Carbon Browser Browser Browser Browser Browser Browser เปิดหน้าต่างเบราวเซอร์ใหม่แล้ว</translation>
+<translation id="5170938038195470297">โปรไฟล์ของคุณไม่สามารถใช้ได้เพราะมาจากรุ่นที่ใหม่กว่าของ Carbon Browser Browser Browser Browser Browser Browser ฟีเจอร์บางอย่างอาจจะไม่พร้อมใช้งาน โปรดระบุไดเรกทอรีของโปรไฟล์อื่นหรือใช้ Carbon Browser Browser Browser Browser Browser Browser รุ่นที่ใหม่กว่า</translation>
+<translation id="5193136243808726294">Google Chrome OS ไม่สามารถเปิดหน้านี้</translation>
+<translation id="521447420733633466">เพื่อนและครอบครัวสามารถท่องเว็บแยกกันและตั้งค่า Carbon Browser Browser Browser Browser Browser Browser ตามที่ตนต้องการในกรณีที่ใช้อุปกรณ์ร่วมกัน</translation>
+<translation id="5251420635869119124">ผู้เยี่ยมชมสามารถใช้ Carbon Browser Browser Browser Browser Browser Browser ได้โดยไม่ทิ้งร่องรอยไว้</translation>
+<translation id="5251679006894510177">ใกล้จะอัปเดตเสร็จแล้ว เปิด Carbon Browser Browser Browser Browser Browser Browser อีกครั้งเพื่อให้การอัปเดตเสร็จสมบูรณ์ หน้าต่างที่ไม่ระบุตัวตนจะไม่เปิดให้อีก</translation>
+<translation id="5334487786912937552">Carbon Browser Browser Browser Browser Browser Browser ต้องการสิทธิ์เข้าถึงพื้นที่เก็บข้อมูลเพื่อดาวน์โหลดไฟล์</translation>
+<translation id="5386244825306882791">อีกทั้งยังควบคุมหน้าที่จะแสดงเมื่อคุณเปิด Carbon Browser Browser Browser Browser Browser Browser หรือทำการค้นหาจากแถบอเนกประสงค์ด้วย</translation>
+<translation id="5394833366792865639">แชร์แท็บ Carbon Browser Browser Browser Browser Browser Browser</translation>
+<translation id="5430073640787465221">ไฟล์ค่ากำหนดของคุณขัดข้องหรือไม่ถูกต้อง Carbon Browser Browser Browser Browser Browser Browser ไม่สามารถกู้คืนการตั้งค่าของคุณได้</translation>
+<translation id="5449497480926255862"><ph name="BEGIN_PARAGRAPH1" />ก่อนที่จะเริ่ม โปรดตรวจสอบว่าคุณสำรองข้อมูลล่าสุดแล้ว การติดตั้ง Chrome OS จะเขียนทับข้อมูลทั้งหมดในฮาร์ดไดรฟ์<ph name="END_PARAGRAPH1" />
+          <ph name="BEGIN_PARAGRAPH2" />Google ไม่มีส่วนรับผิดชอบต่อการสูญหายของข้อมูล และไม่รับประกันว่า Chrome OS จะใช้งานได้ในรุ่นที่ไม่ผ่านการรับรอง โปรดไปที่ [TBD] เพื่อดูข้อมูลเพิ่มเติมเกี่ยวกับรุ่นที่ได้รับการรับรอง<ph name="END_PARAGRAPH2" />
+          <ph name="BEGIN_PARAGRAPH3" />ดูข้อมูลเพิ่มเติมเกี่ยวกับการติดตั้ง Chrome OS และการลบข้อมูล: [TBD URL]<ph name="END_PARAGRAPH3" />
+          <ph name="BEGIN_PARAGRAPH4" />หากพร้อมดำเนินการต่อ ให้คลิก "ติดตั้ง Chrome OS" แล้วเราจะแนะนำขั้นตอนการติดตั้งง่ายๆ เพียง 2-3 ขั้นตอนให้คุณ คุณจะยืนยันได้อีกครั้งก่อนที่เราจะทำการเปลี่ยนแปลงกับคอมพิวเตอร์<ph name="END_PARAGRAPH4" /></translation>
+<translation id="5486618155264784386">ติดตั้ง Chrome OS</translation>
+<translation id="556024056938947818">Carbon Browser Browser Browser Browser Browser Browser กำลังพยายามแสดงรหัสผ่าน</translation>
+<translation id="5566025111015594046">Carbon Browser Browser Browser Browser Browser Browser (mDNS-In)</translation>
+<translation id="5657226924540934362">หากการตั้งค่าไม่แสดงในหน้านี้ โปรดดูที่<ph name="LINK_BEGIN" />การตั้งค่า Chrome OS<ph name="LINK_END" /></translation>
+<translation id="565744775970812598"><ph name="FILE_NAME" /> อาจเป็นอันตราย Carbon Browser Browser Browser Browser Browser Browser จึงบล็อกไว้</translation>
+<translation id="5678190148303298925">{COUNT,plural, =0{ผู้ดูแลระบบขอให้คุณเปิด Carbon Browser Browser Browser Browser Browser Browser ขึ้นมาใหม่เพื่อใช้การอัปเดตนี้}=1{ผู้ดูแลระบบขอให้คุณเปิด Carbon Browser Browser Browser Browser Browser Browser ขึ้นมาใหม่เพื่อใช้การอัปเดตนี้ หน้าต่างที่ไม่ระบุตัวตนจะไม่เปิดให้อีก}other{ผู้ดูแลระบบขอให้คุณเปิด Carbon Browser Browser Browser Browser Browser Browser ขึ้นมาใหม่เพื่อใช้การอัปเดตนี้ หน้าต่างที่ไม่ระบุตัวตนจำนวน # หน้าต่างจะไม่เปิดให้อีก}}</translation>
+<translation id="5686916850681061684">ปรับแต่งและควบคุม Carbon Browser Browser Browser Browser Browser Browser มีสิ่งที่คุณจำเป็นต้องทราบ โปรดคลิกเพื่อดูรายละเอียด</translation>
+<translation id="5690427481109656848">Carbon Browser Browser Browser X Labs</translation>
+<translation id="5715063361988620182">{SECONDS,plural, =1{Carbon Browser Browser Browser Browser Browser Browser จะรีสตาร์ทใน 1 วินาที}other{Carbon Browser Browser Browser Browser Browser Browser จะรีสตาร์ทใน # วินาที}}</translation>
+<translation id="573759479754913123">เกี่ยวกับ Chrome OS</translation>
+<translation id="5756509061973259733">มีโปรไฟล์ Carbon Browser Browser Browser Browser Browser Browser ที่ใช้บัญชีนี้ในอุปกรณ์นี้อยู่แล้ว</translation>
+<translation id="5795887333006832406"><ph name="PAGE_TITLE" /> - Carbon Browser Browser Browser Browser Browser Browser Canary</translation>
+<translation id="5804318322022881572">เปิด Carbon Browser Browser Browser Browser Browser Browser ไม่ได้ โปรดลองอีกครั้ง</translation>
+<translation id="5867197326698922595">Carbon Browser Browser Browser Browser Browser Browser กำลังพยายามแก้ไขรหัสผ่าน</translation>
+<translation id="5895138241574237353">ปิดแล้วเปิดอีกครั้ง</translation>
+<translation id="5903106910045431592"><ph name="PAGE_TITLE" /> - หน้าลงชื่อเข้าใช้ของเครือข่าย</translation>
+<translation id="5940385492829620908">เว็บของคุณ บุ๊กมาร์ก และสิ่งอื่นๆ ใน Carbon Browser Browser Browser Browser Browser Browser พร้อมใช้แล้วที่นี่</translation>
+<translation id="5941830788786076944">ทำให้ Carbon Browser Browser Browser Browser Browser Browser เป็นเบราว์เซอร์เริ่มต้น</translation>
+<translation id="6070348360322141662">Carbon Browser Browser Browser Browser Browser Browser จะเข้ารหัสลับข้อมูลของคุณเพื่อเพิ่มความปลอดภัยให้มากยิ่งขึ้น</translation>
+<translation id="608006075545470555">เพิ่มโปรไฟล์งานลงในเบราว์เซอร์นี้</translation>
+<translation id="6113794647360055231">Carbon Browser Browser Browser Browser Browser Browser ดีขึ้นกว่าเดิม</translation>
+<translation id="6145313976051292476">เปิด PDF ใน Carbon Browser Browser Browser Browser Browser Browser</translation>
+<translation id="6169866489629082767"><ph name="PAGE_TITLE" /> - Carbon Browser Browser Browser Browser Browser Browser</translation>
+<translation id="6173637689840186878"><ph name="PAGE_TITLE" /> - Carbon Browser Browser Browser Browser Browser Browser เบต้า</translation>
+<translation id="61852838583753520">อัปเดต &amp;Chrome OS</translation>
+<translation id="6235018212288296708">กฎขาเข้าสำหรับ Carbon Browser Browser Browser Browser Browser Browser เพื่ออนุญาตการเข้าชมแบบ mDNS</translation>
+<translation id="6291089322031436445">แอป Carbon Browser Browser Browser Browser Browser Browser Dev</translation>
+<translation id="6291549208091401781">มีการติดตั้ง Carbon Browser Browser Browser Browser Browser Browser สำหรับผู้ใช้ทุกคนบนคอมพิวเตอร์ของคุณแล้ว</translation>
+<translation id="6368958679917195344">Chrome OS เกิดขึ้นได้ด้วยการสนับสนุนจาก<ph name="BEGIN_LINK_CROS_OSS" />ซอฟต์แวร์โอเพนซอร์ส<ph name="END_LINK_CROS_OSS" />เพิ่มเติม</translation>
+<translation id="6418662306461808273">เปลี่ยนไปใช้โปรไฟล์ Carbon Browser Browser Browser Browser Browser Browser ที่มีอยู่ไหม</translation>
+<translation id="6506909944137591434">Carbon Browser Browser Browser Browser Browser Browser ต้องการสิทธิ์เข้าถึงกล้องเพื่อสร้างแผนที่ 3 มิติของสิ่งที่อยู่รอบตัวคุณ</translation>
+<translation id="6515495397637126556"><ph name="PAGE_TITLE" /> - Carbon Browser Browser Browser Browser Browser Browser Dev</translation>
+<translation id="6568793831116033768">ระบบ Chrome OS</translation>
+<translation id="6676384891291319759">เข้าถึงอินเทอร์เน็ต</translation>
+<translation id="6679975945624592337">ให้ Carbon Browser Browser Browser Browser Browser Browser ทำงานในพื้นหลัง</translation>
+<translation id="6696915334902295848">Carbon Browser Browser Browser Browser Browser Browser ต้องการสิทธิ์เข้าถึงไมโครโฟนสำหรับเว็บไซต์นี้</translation>
+<translation id="6739177684496155661">ดำเนินการต่อในโปรไฟล์ Carbon Browser Browser Browser Browser Browser Browser ใหม่ไหม</translation>
+<translation id="6750954913813541382">Carbon Browser Browser Browser Browser Browser Browser จะส่งข้อความที่คุณพิมพ์ในเบราว์เซอร์ไปยัง Google เพื่อแก้ไขข้อผิดพลาดของการสะกดคำ</translation>
+<translation id="677276454032249905">ออกจาก Carbon Browser Browser Browser Browser Browser Browser ใช่ไหม</translation>
+<translation id="683440813066116847">กฎขาเข้าสำหรับ Carbon Browser Browser Browser Browser Browser Browser Canary เพื่ออนุญาตการเข้าชมแบบ mDNS</translation>
+<translation id="6881299373831449287">กำลังอัปเดต Carbon Browser Browser Browser Browser Browser Browser</translation>
+<translation id="6885412569789873916">แอป Carbon Browser Browser Browser Browser Browser Browser เบต้า</translation>
+<translation id="6943584222992551122">ระบบจะลบข้อมูลการท่องเว็บของบุคคลนี้ออกจากอุปกรณ์เครื่องนี้ หากต้องการกู้ข้อมูลคืน ให้ลงชื่อเข้าใช้ Carbon Browser Browser Browser Browser Browser Browser ในชื่อ <ph name="USER_EMAIL" /></translation>
+<translation id="6967962315388095737">กฎขาเข้าสำหรับ Carbon Browser Browser Browser Browser Browser Browser เบต้าเพื่ออนุญาตการเข้าชมแบบ mDNS</translation>
+<translation id="6989339256997917931">อัปเดต Carbon Browser Browser Browser Browser Browser Browser แล้ว แต่คุณไม่ได้ใช้งานมาไม่ต่ำกว่า 30 วันแล้ว</translation>
+<translation id="7025800014283535195">คุณสลับไปมาระหว่างโปรไฟล์ Carbon Browser Browser Browser Browser Browser Browser ได้ที่นี่</translation>
+<translation id="7062128746136194023">ผู้ปกครองได้ปิด "สิทธิ์สำหรับเว็บไซต์ แอป และส่วนขยาย" ใน Carbon Browser Browser Browser Browser Browser Browser ไม่อนุญาตให้เพิ่ม<ph name="EXTENSION_TYPE_PARAMETER" />นี้</translation>
+<translation id="7088681679121566888">Carbon Browser Browser Browser Browser Browser Browser เป็นเวอร์ชันล่าสุดแล้ว</translation>
+<translation id="7098166902387133879">Carbon Browser Browser Browser Browser Browser Browser ใช้ไมโครโฟนอยู่</translation>
+<translation id="7106741999175697885">ตัวจัดการงาน - Carbon Browser Browser Browser Browser Browser Browser</translation>
+<translation id="7140653346177713799">{COUNT,plural, =0{อัปเดตใหม่ของ Carbon Browser Browser Browser Browser Browser Browser พร้อมให้ใช้งานแล้วและระบบจะใช้อัปเดตดังกล่าวเมื่อคุณเปิด Carbon Browser Browser Browser Browser Browser Browser ขึ้นมาใหม่}=1{อัปเดตใหม่ของ Carbon Browser Browser Browser Browser Browser Browser พร้อมให้ใช้งานแล้วและระบบจะใช้อัปเดตดังกล่าวเมื่อคุณเปิด Carbon Browser Browser Browser Browser Browser Browser ขึ้นมาใหม่ หน้าต่างที่ไม่ระบุตัวตนจะไม่เปิดให้อีก}other{อัปเดตใหม่ของ Carbon Browser Browser Browser Browser Browser Browser พร้อมให้ใช้งานแล้วและระบบจะใช้อัปเดตดังกล่าวเมื่อคุณเปิด Carbon Browser Browser Browser Browser Browser Browser ขึ้นมาใหม่ หน้าต่างที่ไม่ระบุตัวตนจำนวน # หน้าต่างจะไม่เปิดให้อีก}}</translation>
+<translation id="7155997830309522122">หากเปลี่ยนแล้ว โปรดแก้ไขรหัสผ่านที่บันทึกไว้ใน Carbon Browser Browser Browser Browser Browser Browser ให้ตรงกับรหัสผ่านใหม่</translation>
+<translation id="7161904924553537242">ยินดีต้อนรับสู่ Carbon Browser Browser Browser Browser Browser Browser</translation>
+<translation id="7242029209006116544">คุณกำลังลงชื่อเข้าใช้ด้วยบัญชีที่จัดการ และให้การควบคุมระดับผู้ดูแลระบบของบัญชีดังกล่าวเหนือโปรไฟล์ Carbon Browser Browser Browser Browser Browser Browser ของคุณ ข้อมูล Carbon Browser Browser Browser Browser Browser Browser เช่น แอป บุ๊กมาร์ก ประวัติการเข้าชม รหัสผ่าน และการตั้งค่าอื่นๆ จะเชื่อมโยงอย่างถาวรกับ <ph name="USER_NAME" /> คุณจะสามารถลบข้อมูลนี้ผ่านทางแผงควบคุมบัญชี Google แต่คุณจะไม่สามารถเชื่อมโยงข้อมูลนี้กับบัญชีอื่น คุณสามารถเลือกที่จะสร้างโปรไฟล์ใหม่เพื่อแยกเก็บข้อมูล Carbon Browser Browser Browser Browser Browser Browser ที่มีอยู่ของคุณ <ph name="LEARN_MORE" /></translation>
+<translation id="7275165473619697274">กำลังติดตั้ง Chrome OS</translation>
+<translation id="7295052994004373688">นี่เป็นภาษาที่ใช้ในการแสดง UI ของ Carbon Browser Browser Browser Browser Browser Browser</translation>
+<translation id="7296210096911315575">ข้อมูลสำคัญเกี่ยวกับการใช้งานและความปลอดภัย</translation>
+<translation id="7308322188646931570">Carbon Browser Browser Browser Browser Browser Browser ต้องการสิทธิ์เข้าถึงพื้นที่เก็บข้อมูลเพื่อดาวน์โหลดไฟล์</translation>
+<translation id="7339898014177206373">หน้าต่างใหม่</translation>
+<translation id="7398801000654795464">คุณเคยลงชื่อเข้าใช้ Carbon Browser Browser Browser Browser Browser Browser ในชื่อ <ph name="USER_EMAIL_ADDRESS" /> โปรดใช้บัญชีเดิมเพื่อลงชื่อเข้าใช้อีกครั้ง</translation>
+<translation id="7408085963519505752">ข้อกำหนดของ Chrome OS</translation>
+<translation id="7419046106786626209">Chrome OS ไม่สามารถซิงค์ข้อมูลของคุณเนื่องจากการซิงค์ไม่พร้อมให้บริการสำหรับโดเมนของคุณ</translation>
+<translation id="7486227612705979895">Carbon Browser Browser Browser Browser Browser Browser จะเข้าถึงไดรฟ์ของคุณเพื่อแสดงคำแนะนำในแถบที่อยู่</translation>
+<translation id="7535429826459677826">Carbon Browser Browser Browser Browser Browser Browser Dev</translation>
+<translation id="7573289029918943991">หากต้องการดูว่าอุปกรณ์เป็นเวอร์ชันล่าสุดแล้วหรือไม่ ให้ไปที่<ph name="LINK_BEGIN" />การตั้งค่า Chrome OS<ph name="LINK_END" /></translation>
+<translation id="7592736734348559088">Carbon Browser Browser Browser Browser Browser Browser ไม่สามารถซิงค์ข้อมูลของคุณเนื่องจากรายละเอียดการลงชื่อเข้าใช้บัญชีของคุณล้าสมัย</translation>
+<translation id="7626032353295482388">ยินดีต้อนรับสู่ Carbon Browser Browser Browser Browser Browser Browser</translation>
+<translation id="7629695634924605473">Carbon Browser Browser Browser Browser Browser Browser จะแจ้งให้ทราบหากมีคนล่วงรู้รหัสผ่านของคุณ</translation>
+<translation id="7641148173327520642">ผู้ดูแลระบบได้กำหนดค่าให้ Carbon Browser Browser Browser Browser Browser Browser เปิด <ph name="ALTERNATIVE_BROWSER_NAME" /> เพื่อเข้าถึง <ph name="TARGET_URL_HOSTNAME" /></translation>
+<translation id="7651907282515937834">โลโก้ Carbon Browser Browser Browser Browser Browser Browser Enterprise</translation>
+<translation id="7665553140559834626">เปิดอีกครั้งเพื่ออัปเดต Chrome OS</translation>
+<translation id="7747138024166251722">โปรแกรมติดตั้งสร้างไดเรกทอรีชั่วคราวไม่ได้ โปรดตรวจสอบพื้นที่ดิสก์ว่างและการอนุญาตให้ติดตั้งซอฟต์แวร์</translation>
+<translation id="7761834446675418963">คลิกชื่อของคุณเพื่อเปิด Carbon Browser Browser Browser Browser Browser Browser และเริ่มท่องเว็บ</translation>
+<translation id="7777080907402804672">หากรูปภาพไม่มีคำอธิบายที่เป็นประโยชน์ Carbon Browser Browser Browser Browser Browser Browser จะพยายามใส่คำอธิบายให้คุณ รูปภาพจะส่งมายัง Google เพื่อสร้างคำอธิบาย คุณปิดการดำเนินการนี้ได้ทุกเมื่อในการตั้งค่า</translation>
+<translation id="7781002470561365167">Carbon Browser Browser Browser Browser Browser Browser เวอร์ชันใหม่มีให้ได้ลองใช้กันแล้ว</translation>
+<translation id="778331955594035129">Carbon Browser Browser Browser Browser Browser Browser ต้องการสิทธิ์เข้าถึงตำแหน่งสำหรับเว็บไซต์นี้</translation>
+<translation id="7787950393032327779">ดูเหมือนว่าโปรไฟล์กำลังถูกใช้งานโดยกระบวนการอื่นของ Carbon Browser Browser Browser Browser Browser Browser (<ph name="PROCESS_ID" />) บนคอมพิวเตอร์อีกเครื่อง (<ph name="HOST_NAME" />)  Carbon Browser Browser Browser Browser Browser Browser ล็อกโปรไฟล์ไว้เพื่อไม่ให้โปรไฟล์เกิดความเสียหาย  หากคุณมั่นใจว่าไม่มีกระบวนการอื่นใดกำลังใช้โปรไฟล์นี้อยู่ คุณสามารถปลดล็อกโปรไฟล์และเปิด Carbon Browser Browser Browser Browser Browser Browser ใหม่</translation>
+<translation id="7801699035218095297">Carbon Browser Browser Browser Browser Browser Browser กำลังพยายามคัดลอกรหัสผ่าน โปรดพิมพ์รหัสผ่าน Windows ของคุณเพื่ออนุญาต</translation>
+<translation id="7808348361785373670">นำออกจาก Carbon Browser Browser Browser Browser Browser Browser...</translation>
+<translation id="7825851276765848807">การติดตั้งล้มเหลวเนื่องจากเกิดข้อผิดพลาดที่ไม่ระบุ โปรดดาวน์โหลด Carbon Browser Browser Browser Browser Browser Browser อีกครั้ง</translation>
+<translation id="7890208801193284374">ถ้าคุณให้ผู้อื่นใช้คอมพิวเตอร์ร่วมด้วย เพื่อนๆ และครอบครัวของคุณสามารถท่องเว็บแยกกันได้และตั้งค่า Carbon Browser Browser Browser Browser Browser Browser ได้ตามที่พวกเขาต้องการ</translation>
+<translation id="7896673875602241923">ก่อนหน้านี้มีผู้ลงชื่อเข้าใช้ Carbon Browser Browser Browser Browser Browser Browser ในคอมพิวเตอร์นี้ด้วยชื่อ <ph name="ACCOUNT_EMAIL_LAST" /> โปรดสร้างผู้ใช้ Carbon Browser Browser Browser Browser Browser Browser ใหม่เพื่อเก็บข้อมูลแยก</translation>
+<translation id="7917876797003313048">คุณจัดการบัญชี Google ที่ลงชื่อเข้าใช้ได้ บัญชี Google ใช้สำหรับเบราว์เซอร์ Carbon Browser Browser Browser Browser Browser Browser, Play Store, Gmail และอื่นๆ หากต้องการเพิ่มบัญชีให้คนอื่น เช่น สมาชิกในครอบครัว ให้เพิ่มบุคคลใหม่ลงใน <ph name="DEVICE_TYPE" /> แทน <ph name="LINK_BEGIN" />ดูข้อมูลเพิ่มเติม<ph name="LINK_END" /></translation>
+<translation id="7930071585467473040">Carbon Browser Browser Browser Browser Browser Browser กำลังพยายามคัดลอกรหัสผ่าน</translation>
+<translation id="7962410387636238736">คอมพิวเตอร์เครื่องนี้จะไม่ได้รับการอัปเดต Carbon Browser Browser Browser Browser Browser Browser อีกต่อไปเพราะระบบไม่รองรับ Windows XP และ Windows Vista แล้ว</translation>
+<translation id="79947657522496226">Chrome OS เกิดขึ้นได้ด้วยการสนับสนุนจาก<ph name="BEGIN_LINK_CROS_OSS" />ซอฟต์แวร์โอเพนซอร์ส<ph name="END_LINK_CROS_OSS" />เพิ่มเติม เช่นเดียวกับ<ph name="BEGIN_LINK_LINUX_OSS" />สภาพแวดล้อมในการพัฒนาซอฟต์แวร์ Linux<ph name="END_LINK_LINUX_OSS" /></translation>
+<translation id="8008534537613507642">ติดตั้ง Carbon Browser Browser Browser Browser Browser Browser ใหม่</translation>
+<translation id="8013993649590906847">หากรูปภาพไม่มีคำอธิบายที่เป็นประโยชน์ Carbon Browser Browser Browser Browser Browser Browser จะพยายามใส่คำอธิบายให้คุณ รูปภาพจะส่งมายัง Google เพื่อสร้างคำอธิบาย</translation>
+<translation id="8129812357326543296">เกี่ยวกับ &amp;Carbon Browser Browser Browser Browser Browser Browser</translation>
+<translation id="822971176939352383">บัญชีเหล่านี้ไม่ได้ลงชื่อเข้าใช้ในโปรไฟล์ Carbon Browser Browser Browser Browser Browser Browser ใดๆ เลย หากต้องการใช้บัญชีในโปรไฟล์อื่น ให้นำโปรไฟล์แรกออกก่อน</translation>
+<translation id="8255190535488645436">Carbon Browser Browser Browser Browser Browser Browser ใช้กล้องและไมโครโฟนของคุณอยู่</translation>
+<translation id="8286862437124483331">Carbon Browser Browser Browser Browser Browser Browser กำลังพยายามแสดงรหัสผ่าน พิมพ์รหัสผ่าน Windows ของคุณเพื่อแสดงรหัสผ่าน</translation>
+<translation id="828798499196665338">ผู้ปกครองได้ปิด "สิทธิ์สำหรับเว็บไซต์ แอป และส่วนขยาย" ใน Carbon Browser Browser Browser Browser Browser Browser ไม่อนุญาตให้เปิดใช้<ph name="EXTENSION_TYPE_PARAMETER" />นี้</translation>
+<translation id="8290100596633877290">อ๊ะ! Carbon Browser Browser Browser Browser Browser Browser ขัดข้อง เปิดใหม่ตอนนี้หรือไม่</translation>
+<translation id="8342675569599923794">ไฟล์นี้อันตราย Carbon Browser Browser Browser Browser Browser Browser จึงบล็อกไว้</translation>
+<translation id="8370517070665726704">ลิขสิทธิ์ <ph name="YEAR" /> Carbon Browser Browser Browser X Labs สงวนลิขสิทธิ์</translation>
+<translation id="840084489713044809">Carbon Browser Browser Browser Browser Browser Browser ต้องการส่งออกรหัสผ่านของคุณ</translation>
+<translation id="8433638294851456451">หากต้องการส่งหมายเลขจากที่นี่ไปยังโทรศัพท์ Android ให้ลงชื่อเข้าใช้ Carbon Browser Browser Browser Browser Browser Browser ในอุปกรณ์ทั้งสองเครื่อง</translation>
+<translation id="8498858610309223613">ระบบเพิ่งนำการอัปเดตความปลอดภัยพิเศษไปใช้กับ Carbon Browser Browser Browser Browser Browser Browser รีสตาร์ทเลย แล้วเราจะคืนค่าแท็บให้คุณ</translation>
+<translation id="8521348052903287641">กฎขาเข้าสำหรับ Carbon Browser Browser Browser Browser Browser Browser Dev เพื่ออนุญาตการเข้าชมแบบ mDNS</translation>
+<translation id="8540666473246803645">Carbon Browser Browser Browser Browser Browser Browser</translation>
+<translation id="8550334526674375523">โปรไฟล์งานนี้แยกออกจากโปรไฟล์ส่วนตัวโดยสิ้นเชิง</translation>
+<translation id="8556340503434111824">มี Carbon Browser Browser Browser Browser Browser Browser รุ่นใหม่ให้ใช้งานแล้วและเร็วกว่าเดิม</translation>
+<translation id="8614913330719544658">Carbon Browser Browser Browser Browser Browser Browser ไม่ตอบสนอง เปิดใช้งานใหม่ตอนนี้หรือไม่</translation>
+<translation id="861702415419836452">Carbon Browser Browser Browser Browser Browser Browser ต้องการสิทธิ์เข้าถึงกล้องเพื่อสร้างแผนที่ 3 มิติของสิ่งที่อยู่รอบตัวคุณ</translation>
+<translation id="8625237574518804553">{0,plural, =1{Carbon Browser Browser Browser Browser Browser Browser จะเปิดขึ้นมาใหม่ใน 1 นาที}other{Carbon Browser Browser Browser Browser Browser Browser จะเปิดขึ้นมาใหม่ใน # นาที}}</translation>
+<translation id="8641606876632989680">Carbon Browser Browser Browser Browser Browser Browser จะแจ้งให้คุณทราบเมื่อคุณลงชื่อเข้าใช้ด้วยรหัสผ่านที่ไม่รัดกุม</translation>
+<translation id="8669527147644353129">ตัวช่วยเหลือของ Carbon Browser Browser Browser Browser Browser Browser</translation>
+<translation id="8679801911857917785">อีกทั้งยังควบคุมหน้าที่จะแสดงเมื่อคุณเปิด Carbon Browser Browser Browser Browser Browser Browser ด้วย</translation>
+<translation id="8686817260976772516">โปรไฟล์ Carbon Browser Browser Browser Browser Browser Browser ช่วยให้คุณแยกข้อมูลต่างๆ ใน Carbon Browser Browser Browser Browser Browser Browser ออกจากกัน สร้างโปรไฟล์สำหรับเพื่อนและครอบครัว หรือแยกการทำงานออกจากความบันเทิง</translation>
+<translation id="870251953148363156">อัปเดต &amp;Carbon Browser Browser Browser Browser Browser Browser</translation>
+<translation id="873133009373065397">Carbon Browser Browser Browser Browser Browser Browser ไม่สามารถกำหนดหรือตั้งค่าเบราว์เซอร์เริ่มต้น</translation>
+<translation id="8823341990149967727">Carbon Browser Browser Browser Browser Browser Browser ล้าสมัย</translation>
+<translation id="8834965163890861871">Carbon Browser Browser Browser Browser Browser Browser กำลังพยายามแก้ไขรหัสผ่าน โปรดพิมพ์รหัสผ่าน Windows ของคุณเพื่ออนุญาต</translation>
+<translation id="884296878221830158">อีกทั้งยังควบคุมหน้าที่จะแสดงเมื่อคุณเปิด Carbon Browser Browser Browser Browser Browser Browser หรือคลิกปุ่ม "หน้าแรก"</translation>
+<translation id="8862326446509486874">คุณไม่มีสิทธิ์ในการติดตั้งระดับระบบ ทดลองใช้งานโปรแกรมติดตั้งอีกครั้งโดยกำหนดให้เป็นผู้ดูแลระบบ</translation>
+<translation id="8914504000324227558">เปิด Carbon Browser Browser Browser Browser Browser Browser ขึ้นใหม่</translation>
+<translation id="8922193594870374009">หากต้องการส่งหมายเลขจาก <ph name="ORIGIN" /> ไปยังโทรศัพท์ Android ให้ลงชื่อเข้าใช้ Carbon Browser Browser Browser Browser Browser Browser ในอุปกรณ์ทั้งสองเครื่อง</translation>
+<translation id="8986207147630327271">คุณกำลังเพิ่มโปรไฟล์งานลงในเบราว์เซอร์นี้และให้ผู้ดูแลระบบเป็นผู้ควบคุมเฉพาะโปรไฟล์งานดังกล่าว</translation>
+<translation id="8999208279178790196">{0,plural, =0{มีอัปเดต Carbon Browser Browser Browser Browser Browser Browser พร้อมให้ใช้งาน}=1{มีอัปเดต Carbon Browser Browser Browser Browser Browser Browser พร้อมให้ใช้งาน}other{อัปเดต Carbon Browser Browser Browser Browser Browser Browser พร้อมให้ใช้งานมาแล้ว # วัน}}</translation>
+<translation id="9026991721384951619">Chrome OS ไม่สามารถซิงค์ข้อมูลของคุณเนื่องจากรายละเอียดการลงชื่อเข้าใช้บัญชีของคุณล้าสมัย</translation>
+<translation id="9067395829937117663">Carbon Browser Browser Browser Browser Browser Browser ต้องใช้ Windows 7 ขึ้นไป</translation>
+<translation id="911206726377975832">ลบข้อมูลการท่องเว็บด้วยหรือไม่</translation>
+<translation id="9138603949443464873">เปิด Carbon Browser Browser Browser Browser Browser Browser ขึ้นมาใหม่เพื่อให้การเปลี่ยนแปลงมีผล</translation>
+<translation id="919706545465235479">อัปเดต Carbon Browser Browser Browser Browser Browser Browser เพื่อเริ่มการซิงค์</translation>
+<translation id="922152298093051471">ปรับแต่ง Carbon Browser Browser Browser Browser Browser Browser</translation>
+<translation id="940313311831216333">หากต้องการเข้าถึงข้อมูล Carbon Browser Browser Browser Browser Browser Browser ในอุปกรณ์ทั้งหมด ให้ลงชื่อเข้าใช้แล้วเปิดการซิงค์</translation>
+<translation id="989369509083708165">Carbon Browser Browser Browser Browser Browser Browser เป็นเบราว์เซอร์เริ่มต้นของคุณ</translation>
+<translation id="989816563149873169"><ph name="SHORTCUT" /> จะสลับไปมาระหว่างโปรไฟล์ Carbon Browser Browser Browser Browser Browser Browser ได้</translation>
+</translationbundle>

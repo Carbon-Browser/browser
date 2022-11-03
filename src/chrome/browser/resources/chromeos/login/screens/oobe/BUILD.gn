@@ -1,0 +1,107 @@
+# Copyright 2021 The Chromium Authors. All rights reserved.
+# Use of this source code is governed by a BSD-style license that can be
+# found in the LICENSE file.
+
+import("//chrome/test/base/js2gtest.gni")
+import("//third_party/closure_compiler/compile_js.gni")
+
+group("closure_compile") {
+  deps = [ ":closure_compile_local" ]
+}
+
+js_type_check("closure_compile_local") {
+  uses_legacy_modules = true
+  deps = [
+    ":auto_enrollment_check",
+    ":demo_preferences",
+    ":demo_setup",
+    ":enable_debugging",
+    ":hid_detection",
+    ":oobe_eula",
+    ":oobe_network",
+    ":packaged_license",
+  ]
+}
+
+###############################
+# Closure compiler libraries below
+
+js_library("auto_enrollment_check") {
+  deps = [
+    "../../components/behaviors:login_screen_behavior",
+    "../../components/behaviors:oobe_dialog_host_behavior",
+    "../../components/behaviors:oobe_i18n_behavior",
+    "../../components/dialogs:oobe_loading_dialog",
+  ]
+}
+
+js_library("demo_preferences") {
+  deps = [
+    "../../components/behaviors:login_screen_behavior",
+    "../../components/behaviors:oobe_dialog_host_behavior",
+    "../../components/behaviors:oobe_i18n_behavior",
+    "../../components/buttons:oobe_back_button",
+    "../../components/buttons:oobe_text_button",
+    "../../components/dialogs:oobe_adaptive_dialog",
+  ]
+}
+
+js_library("demo_setup") {
+  deps = [
+    "../../components/behaviors:login_screen_behavior",
+    "../../components/behaviors:multi_step_behavior",
+    "../../components/behaviors:oobe_dialog_host_behavior",
+    "../../components/behaviors:oobe_i18n_behavior",
+    "../../components/buttons:oobe_back_button",
+    "../../components/buttons:oobe_text_button",
+  ]
+}
+
+js_library("enable_debugging") {
+  deps = [
+    "../../components/behaviors:login_screen_behavior",
+    "../../components/behaviors:multi_step_behavior",
+    "../../components/behaviors:oobe_i18n_behavior",
+    "../../components/dialogs:oobe_adaptive_dialog",
+    "../../components/dialogs:oobe_loading_dialog",
+  ]
+}
+
+js_library("hid_detection") {
+  deps = [
+    "../../components/behaviors:login_screen_behavior",
+    "../../components/behaviors:oobe_dialog_host_behavior",
+    "../../components/behaviors:oobe_i18n_behavior",
+    "../../components/dialogs:oobe_adaptive_dialog",
+    "../../components/dialogs:oobe_modal_dialog",
+  ]
+}
+
+js_library("oobe_eula") {
+  deps = [
+    "../..:web_view_helper",
+    "../../components/behaviors:login_screen_behavior",
+    "../../components/behaviors:oobe_dialog_host_behavior",
+    "../../components/behaviors:oobe_i18n_behavior",
+    "../../components/dialogs:oobe_adaptive_dialog",
+    "../../components/dialogs:oobe_modal_dialog",
+  ]
+}
+
+js_library("oobe_network") {
+  deps = [
+    "../../components:network_select_login",
+    "../../components/behaviors:oobe_dialog_host_behavior",
+    "../../components/behaviors:oobe_i18n_behavior",
+    "../../components/dialogs:oobe_adaptive_dialog",
+  ]
+}
+
+js_library("packaged_license") {
+  deps = [
+    "../../components/behaviors:login_screen_behavior",
+    "../../components/behaviors:oobe_dialog_host_behavior",
+    "../../components/behaviors:oobe_i18n_behavior",
+    "../../components/dialogs:oobe_adaptive_dialog",
+  ]
+}

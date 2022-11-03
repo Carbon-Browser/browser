@@ -1,0 +1,13 @@
+Name: Glide Disk LRU Cache Library
+Short Name: disklrucache
+URL: https://github.com/bumptech/glide
+Version: 4.11.0
+License: 
+License File: LICENSE
+Security Critical: yes
+
+Description:
+A cache that uses a bounded amount of space on a filesystem. Based on Jake Wharton's tailored for Glide.
+
+Local Modifications:
+No modifications.

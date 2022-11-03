@@ -1,0 +1,22 @@
+<!--
+@MAC-ALLOW:AXRoleDescription
+@MAC-ALLOW:AXSubrole
+@MAC-ALLOW:AXDescription
+@WIN-ALLOW:xml-roles:*
+@WIN-ALLOW:description*
+@WIN-DENY:name*
+@UIA-WIN-ALLOW:FullDescription*
+@AURALINUX-ALLOW:xml-roles:*
+@AURALINUX-DENY:name*
+@AURALINUX-ALLOW:description*
+@BLINK-ALLOW:descri*
+-->
+<!DOCTYPE html>
+<html>
+<body>
+  <input type="text" id="username" aria-describedby="username-tip" />
+  <div role="tooltip" id="username-tip">Your username should be your email id</div>
+  <div id="date-desc" aria-label="mmddyy" style="display:none"></div>
+  <input type="text" aria-describedby="date-desc" />
+</body>
+</html>

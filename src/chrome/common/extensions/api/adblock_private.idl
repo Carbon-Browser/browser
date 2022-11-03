@@ -1,0 +1,105 @@
+// This file is part of Adblock Plus <https://adblockplus.org/>,
+// Copyright (C) 2006-present eyeo GmbH
+//
+// Adblock Plus is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License version 3 as
+// published by the Free Software Foundation.
+//
+// Adblock Plus is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Adblock Plus.  If not, see <http://www.gnu.org/licenses/>.
+
+// adblockPrivate API.
+// This is a private API exposing ability to control AdblockPlus.
+namespace adblockPrivate {
+
+dictionary BuiltInSubscription {
+  // Subscription url
+  DOMString url;
+  // Subscription title (may be empty)
+  DOMString title;
+  // list of languages this subscription is relevant for.
+  DOMString[] languages;
+};
+
+dictionary AdInfo {
+  // URL of the ad elemennt which has been matched.
+  DOMString url;
+  // URLs of the parent frames.
+  DOMString[] parent_frame_urls;
+  // List of subscriptions having the filter which matched for the ad.
+  DOMString[] subscriptions;
+};
+
+enum UpdateConsent {
+  // Allow downloading subscription updates on any network:
+  ALWAYS,
+  // Allow downloading subscription updates only when on WiFi:
+  WIFI_ONLY
+};
+
+callback BuiltInSubscriptionsCallback =
+    void(BuiltInSubscription[] result);
+callback StateCallback = void(boolean result);
+callback CompletionCallback = void();
+callback ListCallback = void(DOMString[] result);
+callback UpdateConsentCallback = void(UpdateConsent consent);
+
+interface Functions {
+  // Sets on which connection type subscription update is allowed.
+  static void setUpdateConsent(UpdateConsent consent);
+  // Gets connection type on which subscription update is allowed.
+  static void getUpdateConsent(UpdateConsentCallback callback);
+  // Allows to turn Adblock on or off.
+  static void setEnabled(boolean enabled);
+  // Returns whether Adblock is on.
+  static void isEnabled(StateCallback callback);
+  // Allows to turn Acceptable ads on or off.
+  static void setAcceptableAdsEnabled(boolean enabled);
+  // Returns whether Acceptable ads is on.
+  static void isAcceptableAdsEnabled(StateCallback callback);
+  // Gets the list of built-in subscriptions.
+  static void getBuiltInSubscriptions(
+      BuiltInSubscriptionsCallback callback);
+  // Returns a list of built-in subscriptions a user is subscribed to.
+  static void getSelectedBuiltInSubscriptions(ListCallback callback);
+  // Subscribes to a built-in subscription.
+  // |url| must be one from the built-in subscriptions list.
+  static void selectBuiltInSubscription(DOMString url,
+                                        optional CompletionCallback feedback);
+  // Unsubscribes from a built-in subscription.
+  static void unselectBuiltInSubscription(DOMString url,
+                                          optional CompletionCallback feedback);
+  // Returns a list of custom subscriptions a user is subscribed to.
+  static void getCustomSubscriptions(ListCallback callback);
+  // Subscribes to a custom subscription. |url| may point to any URL.
+  static void addCustomSubscription(DOMString url,
+                                    optional CompletionCallback feedback);
+  // Unsubscribes from a custom subscription.
+  static void removeCustomSubscription(DOMString url,
+                                       optional CompletionCallback feedback);
+  // Adds a domain ads should not be blocked on.
+  static void addAllowedDomain(DOMString domain);
+  // Removes a domain ads should not be blocked on.
+  static void removeAllowedDomain(DOMString domain);
+  // Returns a list of domains ads are not blocked on.
+  static void getAllowedDomains(ListCallback callback);
+  // Adds a custom filter.
+  static void addCustomFilter(DOMString filter);
+  // Removes a custom filter.
+  static void removeCustomFilter(DOMString filter);
+};
+
+interface Events {
+  // Fired when an ad is blocked.
+  static void onAdBlocked(AdInfo info);
+
+  // Fired when an ad is explicitly allowed by an exception rule.
+  static void onAdAllowed(AdInfo info);
+};
+
+};

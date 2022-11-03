@@ -1,0 +1,34 @@
+# See https://pre-commit.com for more information
+# See https://pre-commit.com/hooks.html for more hooks
+# Motivation to use hooks and internal agreements are discussed here:
+# https://confluence.eyeo.com/display/DP/Using+pre-commit+to+make+better+commits
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v2.4.0
+    hooks:
+      - id: trailing-whitespace
+      - id: check-added-large-files
+  - repo: https://github.com/adrienverge/yamllint.git
+    rev: v1.17.0
+    hooks:
+      - id: yamllint
+        args: [-d relaxed]
+  - repo: https://gitlab.com/smop/pre-commit-hooks.git
+    rev: df034f88cf92b394e6f00a78fa97a2aa4e270e60
+    hooks:
+      - id: check-gitlab-ci
+        name: GitLab CI/CD configuration check
+        description: Validates .gitlab-ci.yml file
+        entry: pre_commit_hooks/check-gitlab-ci
+        language: script
+        pass_filenames: false
+        files: .gitlab-ci.yml
+  - repo: "local"
+    hooks:
+      - id: clang-format
+        name: clang-format
+        description: Print formatting errors found with ClangFormat.
+        entry: "third_party/depot_tools/clang-format"
+        language: system
+        files: \.(c|cc|cxx|cpp|frag|glsl|h|hpp|hxx|ih|ispc|ipp|java|js|m|mm|proto|textproto|vert)$
+        args: ['-fallback-style=none', '-i', '--dry-run', '--Werror']

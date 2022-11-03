@@ -1,0 +1,19 @@
+diff --git a/src/runtime/runtime-test-wasm.cc b/src/runtime/runtime-test-wasm.cc
+index b33cbeae39..e538b15a75 100644
+--- a/src/runtime/runtime-test-wasm.cc
++++ b/src/runtime/runtime-test-wasm.cc
+@@ -21,6 +21,9 @@
+ #include "src/wasm/wasm-objects-inl.h"
+ #include "src/wasm/wasm-serialization.h"
+
++#pragma GCC diagnostic push
++#pragma GCC diagnostic ignored "-Wformat"
++
+ namespace v8 {
+ namespace internal {
+
+@@ -482,3 +485,4 @@ RUNTIME_FUNCTION(Runtime_FreezeWasmLazyCompilation) {
+
+ }  // namespace internal
+ }  // namespace v8
++#pragma GCC diagnostic pop

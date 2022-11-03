@@ -1,0 +1,300 @@
+<?xml version="1.0" ?>
+<!DOCTYPE translationbundle>
+<translationbundle lang="ka">
+<translation id="1065672644894730302">თქვენი პარამეტრების წაკითხვა შეუძლებელია.
+
+ზოგიერთი ფუნქცია შეიძლება მიუწვდომელი იყოს და პარამეტრების ცვლილებები არ იქნება შენახული.</translation>
+<translation id="1098170124587656448">Carbon Browser Browser Browser Browser Browser Browser დაგიცავთ პერსონალურ მონაცემთა გაჟონვის შემთხვევებისგან, არასათანადო გაფართოებებისა და სხვა უსიამოვნებისგან</translation>
+<translation id="1104942323762546749">Carbon Browser Browser Browser Browser Browser Browser ითხოვს თქვენი პაროლების ექსპორტირებას. აღნიშნულის დასაშვებად აკრიფეთ თქვენი Windows-ის პაროლი.</translation>
+<translation id="113122355610423240">Carbon Browser Browser Browser Browser Browser Browser თქვენი ნაგულისხმევი ბრაუზერია</translation>
+<translation id="1131805035311359397"><ph name="BEGIN_LINK" />შედით Carbon Browser Browser Browser Browser Browser Browser-ში<ph name="END_LINK" />, რომ შეამოწმოთ, შეეხო თუ არა პერსონალურ მონაცემთა გაჟონვის შემთხვევები და უსაფრთხოებასთან დაკავშირებული პრობლემები თქვენს პაროლებს.</translation>
+<translation id="1185134272377778587">Carbon Browser Browser Browser Browser Browser Browser-ის შესახებ</translation>
+<translation id="1315551408014407711">შექმენით ახალი Carbon Browser Browser Browser Browser Browser Browser პროფილი</translation>
+<translation id="1396446129537741364">Carbon Browser Browser Browser Browser Browser Browser ცდილობს პაროლების ჩვენებას.</translation>
+<translation id="1414495520565016063">თქვენ შესული ხართ Carbon Browser Browser Browser Browser Browser Browser-ში!</translation>
+<translation id="151962892725702025">Google Chrome OS-ის საშუალებით ვერ მოხერხდა თქვენი მონაცემების სინქრონიზაცია, რადგან თქვენს დომენზე სინქრონიზაცია მიუწვდომელია.</translation>
+<translation id="1524282610922162960">Carbon Browser Browser Browser Browser Browser Browser ჩანართის გაზიარება</translation>
+<translation id="1553461853655228091">Carbon Browser Browser Browser Browser Browser Browser საჭიროებს თქვენს კამერაზე წვდომის ნებართვას, თქვენი გარემოს 3-განზომილებიანი რუკის შექმნა რომ შეძლოს</translation>
+<translation id="1607715478322902680">{COUNT,plural, =0{განახლების მისასადაგებლად თქვენი ადმინისტრატორი მოითხოვს Carbon Browser Browser Browser Browser Browser Browser-ის ხელახლა გაშვებას}=1{განახლების მისასადაგებლად თქვენი ადმინისტრატორი მოითხოვს Carbon Browser Browser Browser Browser Browser Browser-ის ხელახლა გაშვებას. თქვენი ინკოგნიტო ფანჯარა ხელახლა არ გაიხსნება.}other{განახლების მისასადაგებლად თქვენი ადმინისტრატორი მოითხოვს Carbon Browser Browser Browser Browser Browser Browser-ის ხელახლა გაშვებას. თქვენი # ინკოგნიტო ფანჯარა ხელახლა არ გაიხსნება.}}</translation>
+<translation id="1667812772085710766">Carbon Browser Browser Browser Browser Browser Browser-ის დახურვისას ის ავტომატურად გაასუფთავებს თქვენ მიერ მონახულებულ გვერდებთან დაკავშირებულ ქუქი-ჩანაწერებსა და საიტების მონაცემებს</translation>
+<translation id="1708666629004767631">ხელმისაწვდომია Carbon Browser Browser Browser Browser Browser Browser-ის ახალი, უფრო დაცული ვერსია.</translation>
+<translation id="1774152462503052664">დავრთოთ ნება Carbon Browser Browser Browser Browser Browser Browser-ს გაშვებული იყოს ფონურ რეჟიმში</translation>
+<translation id="1779356040007214683">Carbon Browser Browser Browser Browser Browser Browser-ის უსაფრთხოების გაზრდის მიზნით, ჩვენ გავთიშეთ რამდენიმე გაფართოება, რომელიც არ არის ჩამოთვლილი <ph name="IDS_EXTENSION_WEB_STORE_TITLE" />-ში და, შესაძლოა, დამატებულია თქვენი თანხმობის გარეშე.</translation>
+<translation id="1808667845054772817">Carbon Browser Browser Browser Browser Browser Browser-ის ხელახალი ინსტალაცია</translation>
+<translation id="185970820835152459">შეგიძლიათ მართოთ თქვენი სისტემაში შესული Google ანგარიშები. თქვენი Google ანგარიშები გამოიყენება Carbon Browser Browser Browser Browser Browser Browser ბრაუზერისთვის, Play Store-ისთვის, Gmail-ისთვის და სხვა პროდუქტებისთვის. თუ სხვისი, მაგალითად, ოჯახის წევრის, ანგარიშის დამატება გსურთ, სანაცვლოდ დაამატეთ ახალი პიროვნება თქვენს <ph name="DEVICE_TYPE" />-ს. <ph name="LINK_BEGIN" />შეიტყვეთ მეტი<ph name="LINK_END" /></translation>
+<translation id="1881322772814446296">თქვენ შედიხართ სისტემაში მართული ანგარიშით და ამით აძლევთ ადმინისტრატორს კონტროლს თქვენს Carbon Browser Browser Browser Browser Browser Browser-ის პროფილზე. თქვენი Carbon Browser Browser Browser Browser Browser Browser-ის მონაცემები, როგორიცაა პროგრამები, სანიშნეები, ისტორია, პაროლები და სხვა პარამეტრები სამუდამოდ მიემაგრება <ph name="USER_NAME" />-ს. თქვენ შეძლებთ ამ მონაცემების წაშლას Google ანგარიშების საინფორმაციო დაფის მეშვეობით, თუმცა ამ მონაცემების დაკავშირებას სხვა ანგარიშთან ვერ შეძლებთ. სურვილისამებრ, შეგიძლიათ შექმნათ ახალი პროფილი, არსებული Carbon Browser Browser Browser Browser Browser Browser-ის მონაცემების ცალკე შესანახად. <ph name="LEARN_MORE" /></translation>
+<translation id="1911763535808217981">ამ პარამეტრის გამორთვის შემთხვევაში, Google-ის საიტებში (მაგალითად, Gmail-ში) შესვლას შეძლებთ Carbon Browser Browser Browser Browser Browser Browser-ში შესვლის გარეშე</translation>
+<translation id="1929939181775079593">Carbon Browser Browser Browser Browser Browser Browser არ პასუხობს. გავუშვათ ხელახლა?</translation>
+<translation id="1966382378801805537">Carbon Browser Browser Browser Browser Browser Browser ნაგულისხმევ ბრაუზერს ვერ საზღვრავს, ან ვერ აყენებს</translation>
+<translation id="1981611865800294956">ხელახლა გაშვება &amp;Google Chrome OS-ის გასაახლებლად</translation>
+<translation id="2008474315282236005">ეს მოქმედება წაშლის 1 ერთეულს ამ მოწყობილობიდან. თქვენი მონაცემების მოგვიანებით მისაღებად, შედით Carbon Browser Browser Browser Browser Browser Browser-ში, როგორც <ph name="USER_EMAIL" />.</translation>
+<translation id="2020032459870799438"><ph name="BEGIN_LINK" />შედით Carbon Browser Browser Browser Browser Browser Browser-ში<ph name="END_LINK" />, რომ შეამოწმოთ, შეეხო თუ არა პერსონალურ მონაცემთა გაჟონვის შემთხვევები და უსაფრთხოებასთან დაკავშირებული პრობლემები თქვენს სხვა პაროლებს.</translation>
+<translation id="2174178932569897599">Carbon Browser Browser Browser Browser Browser Browser-ის მორგება</translation>
+<translation id="2185166961232948079">Carbon Browser Browser Browser Browser Browser Browser — ქსელში შესვლა — <ph name="PAGE_TITLE" /></translation>
+<translation id="2241627712206172106">თუ თქვენ გაზიარებული გაქვთ კომპიუტერი, თქვენი მეგობრები და ოჯახის წევრები შეძლებენ დამოუკიდებლად დათვალიერებას და Carbon Browser Browser Browser Browser Browser Browser-ის დაყენებას სურვილისამებრ.</translation>
+<translation id="2294245788148774212">არასავალდებულო: Carbon Browser Browser Browser Browser Browser Browser OS-ის ფუნქციებისა და წარმადობის გაუმჯობესების ხელშეწყობა დიაგნოსტიკური და გამოყენების მონაცემების Google-ისთვის ავტომატურად გაგზავნის მეშვეობით.</translation>
+<translation id="2343156876103232566">აქედან თქვენს Android ტელეფონზე ნომრის გასაგზავნად შედით Carbon Browser Browser Browser Browser Browser Browser-ში ორივე მოწყობილობაზე.</translation>
+<translation id="2347108572062610441">ამ გაფართოებამ თქვენ მიერ Carbon Browser Browser Browser Browser Browser Browser-ის გაშვებისას ნაჩვენები გვერდი შეცვალა.</translation>
+<translation id="2396765026452590966">გაფართოებამ „<ph name="EXTENSION_NAME" />“ თქვენ მიერ Carbon Browser Browser Browser Browser Browser Browser-ის გაშვებისას ნაჩვენები გვერდი შეცვალა.</translation>
+<translation id="2401032172288869980">Carbon Browser Browser Browser Browser Browser Browser საჭიროებს კამერისა და მიკროფონზე წვდომის ნებართვას ამ საიტისთვის</translation>
+<translation id="2483889755041906834">Carbon Browser Browser Browser Browser Browser Browser-ში</translation>
+<translation id="2485422356828889247">დეინსტალაცია</translation>
+<translation id="2535480412977113886">Google Chrome OS-მა ვერ დაასინქრონა თქვენი მონაცემები, რადგან თქვენი ანგარიშის შესვლის დეტალები მოძველდა.</translation>
+<translation id="2560420686485554789">ფაილების ჩამოსატვირთად Carbon Browser Browser Browser Browser Browser Browser საჭიროებს მეხსიერებაზე წვდომას</translation>
+<translation id="2572494885440352020">Carbon Browser Browser Browser Browser Browser Browser-ის დამხმარე</translation>
+<translation id="2577788541081224677">თქვენს Carbon Browser Browser Browser Browser Browser Browser კონტენტზე თქვენი ნებისმიერი მოწყობილობიდან წვდომისთვის შედით სისტემაში, რომ სინქრონიზაცია ჩართოთ.</translation>
+<translation id="2580426763510374355">Google Chrome OS-ის დაინსტალირება</translation>
+<translation id="2583187216237139145">ამ პროფილის გამოყენებისას შექმნილი Carbon Browser Browser Browser Browser Browser Browser მონაცემების (მაგ., შექმნილი სანიშნეების, ისტორიის, პაროლებისა და სხვა პარამეტრების) ამოშლა შეუძლია სამსახურის პროფილის ადმინისტრატორს. <ph name="LEARN_MORE" /></translation>
+<translation id="2587578672395088481">განახლების მისასადაგებლად, Google Chrome OS უნდა გადაიტვირთოს.</translation>
+<translation id="2648074677641340862">ინსტალაციის დროს ოპერაციული სისტემის შეცდომა მოხდა. ხელახლა ჩამოტვირთეთ Carbon Browser Browser Browser Browser Browser Browser.</translation>
+<translation id="2661879430930417727">თუ საზიარო მოწყობილობა გაქვთ, თქვენს მეგობრებსა და ოჯახის წევრებს შეუძლიათ ვების დამოუკიდებლად დათვალიერება და Carbon Browser Browser Browser Browser Browser Browser-ის საკუთარი შეხედულებისამებრ დაყენება</translation>
+<translation id="2711502716910134313">Carbon Browser Browser Browser Browser Browser Browser-ის ჩანართი</translation>
+<translation id="2718390899429598676">დამატებითი უსაფრთხოებისთვის, Carbon Browser Browser Browser Browser Browser Browser თქვენს მონაცემებს დაშიფრავს.</translation>
+<translation id="2770231113462710648">შეცვალეთ ნაგულისხმევი ბრაუზერი-ით:</translation>
+<translation id="2799223571221894425">ხელახლა გაშვება</translation>
+<translation id="2837693172913560447">ეს მოქმედება შექმნის ახალ Carbon Browser Browser Browser Browser Browser Browser პროფილს <ph name="USER_EMAIL_ADDRESS" />-ისთვის</translation>
+<translation id="2847479871509788944">Carbon Browser Browser Browser Browser Browser Browser-იდან ამოღება...</translation>
+<translation id="2885378588091291677">ამოცანების მმართველი</translation>
+<translation id="2910007522516064972">Carbon Browser Browser Browser Browser Browser Browser-ის შ&amp;ესახებ</translation>
+<translation id="2944515913673001130"><ph name="BEGIN_PARAGRAPH1" />ბოლოჯერ შეგახსენებთ, რომ ინსტალაცია <ph name="BEGIN_BOLD" />მთლიანად ამოშლის თქვენს მყარ დისკს<ph name="END_BOLD" />. დარწმუნდით, რომ თქვენთვის მნიშვნელოვანი მონაცემების სარეზერვო ასლი გაქვთ შექმნილი.<ph name="END_PARAGRAPH1" />
+          <ph name="BEGIN_PARAGRAPH2" />ინსტალაციის დაწყების შემდეგ მას ვეღარ გააუქმებთ.<ph name="END_PARAGRAPH2" /></translation>
+<translation id="2977470724722393594">Carbon Browser Browser Browser Browser Browser Browser განახლებულია</translation>
+<translation id="2983934633046890458">Carbon Browser Browser Browser Browser Browser Browser ცდილობს პაროლების რედაქტირებას.</translation>
+<translation id="3032706164202344641">Carbon Browser Browser Browser Browser Browser Browser ვერ ახერხებს პაროლების შემოწმებას. ცადეთ მოგვიანებით.</translation>
+<translation id="3032787606318309379">Carbon Browser Browser Browser Browser Browser Browser-ში დამატება…</translation>
+<translation id="3068515742935458733">დაგვეხმარეთ Carbon Browser Browser Browser Browser Browser Browser-ის გაუმჯობესებაში: გამოგზავნეთ მოხსენებები შეცდომების და <ph name="UMA_LINK" />-ის შესახებ Google-ში</translation>
+<translation id="3103660991484857065">ინსტალაციის პროგრამამ ვერ ამოიღო ფაილები არქივიდან. ხელახლა ჩამოტვირთეთ Carbon Browser Browser Browser Browser Browser Browser.</translation>
+<translation id="3130323860337406239">Carbon Browser Browser Browser Browser Browser Browser იყენებს თქვენს მიკროფონს.</translation>
+<translation id="3155163173539279776">Carbon Browser Browser Browser Browser Browser Browser-ის ხელახლა გაშვება</translation>
+<translation id="3179665906251668410">ბმულის გახსნა Carbon Browser Browser Browser Browser Browser Browser-ის ინკო&amp;გნიტო ფანჯარაში</translation>
+<translation id="3185330573522821672">მოირგეთ თქვენი ახალი Carbon Browser Browser Browser Browser Browser Browser პროფილი</translation>
+<translation id="3190315855212034486">ვაუ! Carbon Browser Browser Browser Browser Browser Browser-ში შეცდომაა. გადავტვირთოთ?</translation>
+<translation id="3229526316128325841">Carbon Browser Browser Browser Browser Browser Browser ითხოვს თქვენი პაროლების ექსპორტირებას.</translation>
+<translation id="3258596308407688501">Carbon Browser Browser Browser Browser Browser Browser ვერ ახერხებს თავის მონაცემთა დირექტორიაში წაკითხვას და ჩაწერის განხორციელებას:
+
+<ph name="USER_DATA_DIRECTORY" /></translation>
+<translation id="3283186697780795848">დაინსტალირებულია Carbon Browser Browser Browser Browser Browser Browser-ის ვერსია <ph name="PRODUCT_VERSION" /></translation>
+<translation id="328888136576916638">Google API გასაღები გამოტოვებულია. Carbon Browser Browser Browser Browser Browser Browser-ის ზოგიერთი ფუნქცია გამორთული იქნება.</translation>
+<translation id="3296368748942286671">ფონური პროგრამების გაშვების გაგრძელება, როდესაც Carbon Browser Browser Browser Browser Browser Browser იხურება</translation>
+<translation id="331951419404882060">Google Chrome OS-მა ვერ დაასინქრონა თქვენი მონაცემები შესვლის შეცდომის გამო.</translation>
+<translation id="3349211344363550267">Carbon Browser Browser Browser Browser Browser Browser გირჩევთ, არ ჩამოტვირთოთ და არც გახსნათ ეს ფაილი</translation>
+<translation id="3350761136195634146">ამ ანგარიშის მქონე Carbon Browser Browser Browser Browser Browser Browser პროფილი უკვე არსებობს</translation>
+<translation id="3406848076815591792">გსურთ არსებულ Carbon Browser Browser Browser Browser Browser Browser პროფილზე გადართვა?</translation>
+<translation id="3430503420100763906">Carbon Browser Browser Browser Browser Browser Browser პროფილები Carbon Browser Browser Browser Browser Browser Browser-ში არსებული თქვენი კონტენტის განცალკევების საშუალებას გაძლევთ. შექმენით პროფილები ოჯახის წევრებისა და მეგობრებისთვის, ან განაცალკევეთ სამსახურებრივი და პირადი მონაცემები.</translation>
+<translation id="3433271666494956603">მიმდინარეობს Google Chrome OS-ის ინსტალაცია</translation>
+<translation id="347328004046849135">Carbon Browser Browser Browser Browser Browser Browser შეგატყობინებთ, როცა სისტემაში გატეხილი პაროლით შეხვალთ</translation>
+<translation id="3474745554856756813">ეს მოქმედება წაშლის <ph name="ITEMS_COUNT" /> ერთეულს ამ მოწყობილობიდან. თქვენი მონაცემების მოგვიანებით მისაღებად, შედით Carbon Browser Browser Browser Browser Browser Browser-ში, როგორც <ph name="USER_EMAIL" />.</translation>
+<translation id="3497319089134299931"><ph name="SHORTCUT" /> გადართავს Carbon Browser Browser Browser Browser Browser Browser პროფილებს</translation>
+<translation id="3509308970982693815">დახურეთ Carbon Browser Browser Browser Browser Browser Browser-ის ყველა ფანჯარა და ხელახლა სცადეთ.</translation>
+<translation id="3575459661164320785">თქვენს კომპიუტერზე აღმოჩენილია საზიანო პროგრამული უზრუნველყოფა. Carbon Browser Browser Browser Browser Browser Browser-ს შეუძლია მისი ამოშლა, თქვენი პარამეტრების აღდგენა და გაფართოებების გათიშვა, რომ ბრაუზერმა კვლავ ნორმალურად იმუშაოს.</translation>
+<translation id="3639635944603682591">ამ პიროვნების დათვალიერების მონაცემები წაიშლება ამ მოწყობილობიდან. მონაცემების აღსადგენად შედით Carbon Browser Browser Browser Browser Browser Browser-ში, როგორც <ph name="USER_EMAIL" />.</translation>
+<translation id="364817392622123556">{COUNT,plural, =0{ხელმისაწვდომია Carbon Browser Browser Browser Browser Browser Browser-ის განახლება, რომელიც მას მიესადაგება ხელახლა გაშვებისთანავე.}=1{ხელმისაწვდომია Carbon Browser Browser Browser Browser Browser Browser-ის განახლება, რომელიც მას მიესადაგება ხელახლა გაშვებისთანავე. თქვენი ინკოგნიტო ფანჯარა ხელახლა არ გაიხსნება.}other{ხელმისაწვდომია Carbon Browser Browser Browser Browser Browser Browser-ის განახლება, რომელიც მას მიესადაგება ხელახლა გაშვებისთანავე. თქვენი # ინკოგნიტო ფანჯარა ხელახლა არ გაიხსნება.}}</translation>
+<translation id="3651803019964686660"><ph name="ORIGIN" />-დან თქვენს Android ტელეფონზე ნომრის გასაგზავნად შედით Carbon Browser Browser Browser Browser Browser Browser-ში ორივე მოწყობილობაზე.</translation>
+<translation id="3685209450716071127">Carbon Browser Browser Browser Browser Browser Browser ვერ ახერხებს პაროლების შემოწმებას. შეამოწმეთ კავშირი ინტერნეტთან.</translation>
+<translation id="370962675267501463">{COUNT,plural, =0{ამ განახლების მისასადაგებლად ადმინისტრატორი გთხოვთ Carbon Browser Browser Browser Browser Browser Browser-ის ხელახლა გაშვებას}=1{ამ განახლების მისასადაგებლად ადმინისტრატორი გთხოვთ Carbon Browser Browser Browser Browser Browser Browser-ის ხელახლა გაშვებას. თქვენი ინკოგნიტო ფანჯარა ხელახლა არ გაიხსნება.}other{ამ განახლების მისასადაგებლად ადმინისტრატორი გთხოვთ Carbon Browser Browser Browser Browser Browser Browser-ის ხელახლა გაშვებას. თქვენი # ინკოგნიტო ფანჯარა ხელახლა არ გაიხსნება.}}</translation>
+<translation id="3713809861844741608">ბმულის გახსნა Carbon Browser Browser Browser Browser Browser Browser-ის ახალ ჩა&amp;ნართში</translation>
+<translation id="3728336900324680424">Carbon Browser Browser Browser Browser Browser Browser-ს ექნება წვდომა თქვენს Drive-ზე მისამართთა ზოლში შემოთავაზებების უზრუნველსაყოფად</translation>
+<translation id="378917192836375108">Carbon Browser Browser Browser Browser Browser Browser საშუალებას გაძლევთ დააწკაპუნოთ ტელეფონის ნომერზე ინტერნეტში და დარეკოთ Skype-ით!</translation>
+<translation id="3848258323044014972"><ph name="PAGE_TITLE" /> - Carbon Browser Browser Browser Browser Browser Browser</translation>
+<translation id="388648406173476553">მოირგეთ და გააკონტროლეთ Carbon Browser Browser Browser Browser Browser Browser. საჭიროა თქვენი ყურადღება — დააწკაპუნეთ დეტალური ინფორმაციისთვის.</translation>
+<translation id="3889543394854987837">Carbon Browser Browser Browser Browser Browser Browser ის გახსნისა და დათვალიერების დაწყებისათვის დააჭირეთ თქვენი სახელს.</translation>
+<translation id="390528597099634151"><ph name="EXISTING_USER" /> უკვე შესულია ამ Carbon Browser Browser Browser Browser Browser Browser პროფილში. თქვენი დათვალიერების მონაცემები რომ განაცალკევოთ, Carbon Browser Browser Browser Browser Browser Browser-ს შეუძლია თქვენთვის პერსონალური პროფილის შექმნა.</translation>
+<translation id="3945058413678539331">Carbon Browser Browser Browser Browser Browser Browser ცდილობს პაროლების კოპირებას. აღნიშნულის დასაშვებად აკრიფეთ თქვენი Windows-ის პაროლი ამის დასაშვებად.</translation>
+<translation id="4036079820698952681">ხელი შეუწყვეთ Carbon Browser Browser Browser Browser Browser Browser-ის გაუმჯობესებას <ph name="BEGIN_LINK" />მიმდინარე პარამეტრების<ph name="END_LINK" /> გამოგზავნის მეშვეობით</translation>
+<translation id="4050175100176540509">უსაფრთხოების მნიშვნელოვანი გაუმჯობესება და ახალი თვისებები ხელმისაწვდომია უახლეს ვერსიაში.</translation>
+<translation id="419998258129752635"><ph name="PAGE_TITLE" /> — ქსელში შესვლა — Carbon Browser Browser Browser Browser Browser Browser</translation>
+<translation id="421369550622382712">აღმოაჩინეთ შესანიშნავი აპები, თამაშები, გაფართოებები და თემები Carbon Browser Browser Browser Browser Browser Browser-ისთვის.</translation>
+<translation id="4216212958613226427">ეს ენა გამოიყენება Carbon Browser Browser Browser Browser Browser Browser-ის სამომხმარებლო ინტერფეისისთვის</translation>
+<translation id="4230135487732243613">დავუკავშიროთ თქვენი Carbon Browser Browser Browser Browser Browser Browser მონაცემები ამ ანგარიშის?</translation>
+<translation id="4264410486868823224"><ph name="MANAGER" /> მოითხოვს, რომ ამ მოწყობილობის გამოყენებამდე წაიკითხოთ ქვემოთ მოცემული მომსახურების პირობები და დაეთანხმოთ მათ. აღნიშნული პირობები არ არის Google Chrome OS-ის წესების დამატება, ასევე, არ ცვლის და არც ზღუდავს მათ.</translation>
+<translation id="4271805377592243930">Carbon Browser Browser Browser Browser Browser Browser-თან დაკავშირებული დახმარების მიღება</translation>
+<translation id="4285930937574705105">ინსტალაცია ვერ განხორციელდა განუსაზღვრელი შეცდომის გამო. თუ Carbon Browser Browser Browser Browser Browser Browser ამჟამად გაშვებულია, დახურეთ იგი და ხელახლა სცადეთ.</translation>
+<translation id="429583012151745428">მიმდინარეობს ინსტალაცია. არ გამორთოთ მოწყობილობა. ინსტალაციას ოც წუთზე მეტი არ უნდა დასჭირდეს. მოწყობილობა ავტომატურად გამოირთვება ინსტალაციის შემდეგ.</translation>
+<translation id="4407044323746248786">მაინც გსურთ Carbon Browser Browser Browser Browser Browser Browser-იდან გასვლა?</translation>
+<translation id="4415566066719264597">Carbon Browser Browser Browser Browser Browser Browser-ისთვის ფონურ რეჟიმში მუშაობის დაშვება</translation>
+<translation id="4423735387467980091">Carbon Browser Browser Browser Browser Browser Browser-ის მორგება და კონტროლი</translation>
+<translation id="452711251841752011">მოგესალმებით Carbon Browser Browser Browser Browser Browser Browser-ში; გახსნილია ბრაუზერის ახალი ფანჯარა</translation>
+<translation id="4544142686420020088">Carbon Browser Browser Browser Browser Browser Browser-ის განახლება ვერ მოხერხდა შეფერხების გამო. <ph name="BEGIN_LINK" />შეასწორეთ Carbon Browser Browser Browser Browser Browser Browser-ის განახლებასთან დაკავშირებული პრობლემები და განუხორციელებელი განახლებები.<ph name="END_LINK" /></translation>
+<translation id="454579500955453258">გსურთ ახალ Carbon Browser Browser Browser Browser Browser Browser პროფილში გაგრძელება?</translation>
+<translation id="4567424176335768812">თქვენ შესული ხართ, როგორც <ph name="USER_EMAIL_ADDRESS" />. ახლა შეგიძლიათ გახსნათ თქვენი სანიშნეები, ისტორია და სხვა პარამეტრები ყველა მოწყობილობიდან, რომელშიც შესული ხართ.</translation>
+<translation id="459535195905078186">Carbon Browser Browser Browser Browser Browser Browser პროგრამები</translation>
+<translation id="4665829708273112819">გაფრთხილება: Carbon Browser Browser Browser Browser Browser Browser ვერ შეუშლის ხელს გაფართოებებს დათვალიერების ისტორიის შენახვაში. ინკოგნიტო რეჟიმში ამ გაფართოების გასათიშად მოხსენით მონიშვნა ამ ვარიანტზე.</translation>
+<translation id="4677944499843243528">როგორც ჩანს, პროფილი გამოიყენება სხვა Carbon Browser Browser Browser Browser Browser Browser პროცესის მიერ (<ph name="PROCESS_ID" />) სხვა კომპიუტერში (<ph name="HOST_NAME" />). Carbon Browser Browser Browser Browser Browser Browser-მა დაბლოკა პროფილი, რათა არ დაზიანდეს. თუ დარწმუნებული ხართ, რომ სხვა პროცესები არ იყენებენ ამ პროფილს, შეგიძლიათ განბლოკოთ პროფილი და ხელახლა გაუშვათ Carbon Browser Browser Browser Browser Browser Browser.</translation>
+<translation id="469338717132742108">Google Chrome OS-თან დაკავშირებული დახმარების მიღება</translation>
+<translation id="4708774505295300557">Carbon Browser Browser Browser Browser Browser Browser-ში უკვე განხორციელდა შესვლა ამ კომპიუტერიდან, როგორც <ph name="ACCOUNT_EMAIL_LAST" />. გთხოვთ, შექმნათ Carbon Browser Browser Browser Browser Browser Browser-ის ახალი მომხმარებელი თქვენი ინფორმაციის ცალკე შესანახად.</translation>
+<translation id="4746050847053251315">მაინც გსურთ Carbon Browser Browser Browser Browser Browser Browser-იდან გასვლა?</translation>
+<translation id="4748217263233248895">Carbon Browser Browser Browser Browser Browser Browser-ს ეს-ესაა მიესადაგა უსაფრთხოების საგანგებო განახლება. გადატვირთეთ ის ახლავე (თქვენი ჩანართები აღდგება).</translation>
+<translation id="4750035648288509542">ყველაფერი თითქმის მზადაა! განახლების დასასრულებლად ხელახლა გაუშვით Carbon Browser Browser Browser Browser Browser Browser. ინკოგნიტო ფანჯრები ხელახლა არ გაიხსნება.</translation>
+<translation id="4788777615168560705">Carbon Browser Browser Browser Browser Browser Browser ვერ ახერხებს პაროლების შემოწმებას. ცადეთ 24 საათში ან <ph name="BEGIN_LINK" />შეამოწმეთ პაროლები თქვენს Google ანგარიშში<ph name="END_LINK" />.</translation>
+<translation id="479167709087336770">ეს ფუნქცია იყენებს მართლწერის იმ შემმოწმებელს, რომელიც გამოიყენება Google Search-ში. ბრაუზერში თქვენ მიერ აკრეფილი ტექსტი ეგზავნება Google-ს. ამ ქცევის შეცვლა ნებისმიერ დროს შეგიძლიათ პარამეტრებიდან.</translation>
+<translation id="4888717733111232871">Carbon Browser Browser Browser Browser Browser Browser-ის შემავალი წესი დაუშვას mDNS მოძრაობა.</translation>
+<translation id="4893347770495441059">ხელახლა გაშვება &amp;Carbon Browser Browser Browser Browser Browser Browser-ის გასაახლებლად</translation>
+<translation id="4943838377383847465">Carbon Browser Browser Browser Browser Browser Browser ფონურ რეჟიმშია.</translation>
+<translation id="4987820182225656817">სტუმრებს შეუძლიათ Carbon Browser Browser Browser Browser Browser Browser-ის გამოყენება და მისი ყველა ფუნქციით სარგებლობა.</translation>
+<translation id="4994636714258228724">საკუთარი თავის დამატება Carbon Browser Browser Browser Browser Browser Browser-ში</translation>
+<translation id="5224391634244552924">შენახული პაროლები არ არის. პაროლების შემოწმებას Carbon Browser Browser Browser Browser Browser Browser შეძლებს მათი შენახვის შემდეგ.</translation>
+<translation id="5252179775517634216"><ph name="EXISTING_USER" /> უკვე შესულია ამ Carbon Browser Browser Browser Browser Browser Browser პროფილში. ეს მოქმედება შექმნის ახალ Carbon Browser Browser Browser Browser Browser Browser პროფილს <ph name="USER_EMAIL_ADDRESS" />-ისთვის</translation>
+<translation id="5277894862589591112">ცვლილებების მისასადაგებლად ხელახლა გაუშვით Carbon Browser Browser Browser Browser Browser Browser</translation>
+<translation id="5358375970380395591">მართული ანგარიშით შედიხართ სისტემაში და ადმინისტრატორს თქვენს Carbon Browser Browser Browser Browser Browser Browser-ის პროფილზე კონტროლს აძლევთ. თქვენი Carbon Browser Browser Browser Browser Browser Browser ის მონაცემები როგორიცაა თქვენი აპლიკაციები, სანიშნები, ისტორიები, პაროლები, და სხვა პარამეტრები მუდმივად მიბმული გახდება <ph name="USER_NAME" />-თან. ამ მონაცემების წაშლას Google ანგარიშის საინფორმაციო დაფის გზით შეძლებთ, მაგრამ შეუძლებელი იქნება ამ მონაცემების სხვა ანგარიშთან გაერთიანება. <ph name="LEARN_MORE" /></translation>
+<translation id="5386450000063123300">მიმდინარეობს Carbon Browser Browser Browser Browser Browser Browser-ის განახლება (<ph name="PROGRESS_PERCENT" />)</translation>
+<translation id="538767207339317086">Carbon Browser Browser Browser Browser Browser Browser-ში შესვლის დაშვება</translation>
+<translation id="5398878173008909840">ხელმისაწვდომია Carbon Browser Browser Browser Browser Browser Browser-ის ახალი ვერსია.</translation>
+<translation id="5416696090975899932">Carbon Browser Browser Browser Browser Browser Browser წინასწარ ვერ გიჩვენებთ ამოსაბეჭდ ვერსიას, ვინაიდან მას აკლია ჩაშენებული PDF მნახველი.</translation>
+<translation id="5427571867875391349">დააყენეთ Carbon Browser Browser Browser Browser Browser Browser ნაგულისხმევ ბრაუზერად</translation>
+<translation id="5438241569118040789"><ph name="PAGE_TITLE" /> — Carbon Browser Browser Browser Browser Browser Browser Beta</translation>
+<translation id="5479196819031988440">Google Chrome OS ვერ ხსნის ამ გვერდს.</translation>
+<translation id="5480860683791598150">Carbon Browser Browser Browser Browser Browser Browser საჭიროებს თქვენს მდებარეობაზე წვდომის ნებართვას ამ საიტისთვის გასაზიარებლად</translation>
+<translation id="549669000822060376">დაელოდეთ, სანამ Carbon Browser Browser Browser Browser Browser Browser დააინსტალირებს სისტემის უახლეს განახლებებს.</translation>
+<translation id="5496810170689441661">Carbon Browser Browser Browser Browser Browser Browser ცდილობს პაროლების რედაქტირებას. აღნიშნულის დასაშვებად აკრიფეთ თქვენი Windows-ის პაროლი ამის დასაშვებად.</translation>
+<translation id="5527463683072221100">PDF-ების გახსნა Carbon Browser Browser Browser Browser Browser Browser-ში</translation>
+<translation id="5623402015214259806">{0,plural, =0{ხელმისაწვდომია Carbon Browser Browser Browser Browser Browser Browser-ის განახლება}=1{ხელმისაწვდომია Carbon Browser Browser Browser Browser Browser Browser-ის განახლება}other{უკვე # დღეა, რაც ხელმისაწვდომია Carbon Browser Browser Browser Browser Browser Browser-ის განახლება}}</translation>
+<translation id="5634636535844844681">Carbon Browser Browser Browser Browser Browser Browser-ის მუშაობისთვის საჭიროა Windows 7 ან უფრო ახალი ვერსია.</translation>
+<translation id="5653831366781983928">გთხოვთ, ახლავე გადატვირთოთ Carbon Browser Browser Browser Browser Browser Browser</translation>
+<translation id="5698481217667032250">Carbon Browser Browser Browser Browser Browser Browser-ის ამ ენაზე ჩვენება</translation>
+<translation id="5820394555380036790">Google Chrome OS</translation>
+<translation id="5854740544000584380">Google Chrome OS და <ph name="BEGIN_LINK_LINUX_OSS" />Linux-ის შემუშავების გარემო <ph name="END_LINK_LINUX_OSS" /> მუშაობს <ph name="BEGIN_LINK_CROS_OSS" />ღია კოდის დამატებითი პროგრამული უზრუნველყოფის<ph name="END_LINK_CROS_OSS" /> დამსახურებით.</translation>
+<translation id="5862307444128926510">მოგესალმებათ Carbon Browser Browser Browser Browser Browser Browser!</translation>
+<translation id="5883558403894052917">Carbon Browser Browser Browser Browser Browser Browser-მა აღმოაჩინა, რომ შემდეგი ერთეულები შეიცავს მავნე პროგრამას:</translation>
+<translation id="5895138241574237353">გადატვირთვა</translation>
+<translation id="5903106910045431592"><ph name="PAGE_TITLE" /> — ქსელში შესვლა</translation>
+<translation id="5987687638152509985">სინქრონიზაციის დასაწყებად, განაახლეთ Carbon Browser Browser Browser Browser Browser Browser</translation>
+<translation id="6039377483953237732">Google Chrome OS-ის ვერსია</translation>
+<translation id="6055895534982063517">ხელმისაწვდომია Carbon Browser Browser Browser Browser Browser Browser-ის ახალი ვერსია, რომელიც უფრო სწრაფია.</translation>
+<translation id="6063093106622310249">Carbon Browser Browser Browser Browser Browser Browser-ში &amp;გახსნა</translation>
+<translation id="6072279588547424923"><ph name="EXTENSION_NAME" /> დაემატა Carbon Browser Browser Browser Browser Browser Browser-ს</translation>
+<translation id="608006075545470555">დაამატეთ სამსახურის პროფილი ამ ბრაუზერს</translation>
+<translation id="608189560609172163">შესვლასთან დაკავშირებული არსებული შეცდომის გამო, Carbon Browser Browser Browser Browser Browser Browser მა ვერ შეძლო თქვენი მონაცებების სინქრონიზაცია.</translation>
+<translation id="6096348254544841612">მოირგეთ და გააკონტროლეთ Carbon Browser Browser Browser Browser Browser Browser. ხელმისაწვდომია განახლება.</translation>
+<translation id="6120345080069858279">Carbon Browser Browser Browser Browser Browser Browser შეინახავს ამ პაროლს თქვენს Google ანგარიშში. მისი დამახსოვრება აუცილებელი არ არის.</translation>
+<translation id="6129621093834146363">Carbon Browser Browser Browser Browser Browser Browser-მა დაბლოკა <ph name="FILE_NAME" />, რადგან ის სახიფათოა.</translation>
+<translation id="6134968993075716475">Safe Browsing გამორთულია. Carbon Browser Browser Browser Browser Browser Browser გირჩევთ მის ჩართვას.</translation>
+<translation id="6145820983052037069">აქ შეგიძლიათ Carbon Browser Browser Browser Browser Browser Browser პროფილებს შორის გადართვა</translation>
+<translation id="6183079672144801177">დარწმუნდით, რომ თქვენს <ph name="TARGET_DEVICE_NAME" />-ზე შესული ხართ Carbon Browser Browser Browser Browser Browser Browser-ში, შემდეგ კი ხელახლა ცადეთ გაგზავნა.</translation>
+<translation id="6212496753309875659">ამ კომპიუტერს უკვე აქვს Carbon Browser Browser Browser Browser Browser Browser.-ის უფრო ახალი ვერსია. იმ შემთხვევაში, თუ პროგრამა არ მუშაობს, გთხოვთ, განახორციელეთ Carbon Browser Browser Browser Browser Browser Browser-ის დეინსტალაცია და სცადეთ ისევ.</translation>
+<translation id="6219195342503754812">{0,plural, =0{Carbon Browser Browser Browser Browser Browser Browser ახლა ხელახლა გაეშვება}=1{Carbon Browser Browser Browser Browser Browser Browser ხელახლა გაეშვება 1 წამში}other{Carbon Browser Browser Browser Browser Browser Browser ხელახლა გაეშვება # წამში}}</translation>
+<translation id="6241367896540709610">ფაილების ჩამოსატვირთად Carbon Browser Browser Browser Browser Browser Browser საჭიროებს მეხსიერებაზე წვდომის ნებართვას</translation>
+<translation id="6248213926982192922">Carbon Browser Browser Browser Browser Browser Browser გახდეს ნაგულისხმევი ბრაუზერი</translation>
+<translation id="6266342355635466082">Carbon Browser Browser Browser Browser Browser Browser ვერ ახერხებს განახლებების შემოწმებას. შეამოწმეთ კავშირი ინტერნეტთან.</translation>
+<translation id="6268381023930128611">გსურთ Carbon Browser Browser Browser Browser Browser Browser-იდან გამოსვლა?</translation>
+<translation id="6281746429495226318">თქვენი Carbon Browser Browser Browser Browser Browser Browser პროფილის მორგება</translation>
+<translation id="6290827346642914212">დაასათაურეთ თქვენი Carbon Browser Browser Browser Browser Browser Browser პროფილი</translation>
+<translation id="6295779123002464101">Carbon Browser Browser Browser Browser Browser Browser-მა დაბლოკა <ph name="FILE_NAME" />, რადგან ის შეიძლება სახიფათო იყოს.</translation>
+<translation id="6309712487085796862">Carbon Browser Browser Browser Browser Browser Browser იყენებს თქვენს კამერას.</translation>
+<translation id="6333502561965082103">Carbon Browser Browser Browser Browser Browser Browser-ში სხვა ოპერაცია მიმდინარეობს. გთხოვთ, ცადოთ მოგვიანებით.</translation>
+<translation id="6334986366598267305">ყველა საერთო მოხმარების კომპიუტერზე ადვილი გახდა Google ანგარიშით Carbon Browser Browser Browser Browser Browser Browser-ის გამოყენება.</translation>
+<translation id="6373523479360886564">ნამდვილად გსურთ მოახდინოთ Carbon Browser Browser Browser Browser Browser Browser-ის დეინსტალაცია?</translation>
+<translation id="6403826409255603130">Carbon Browser Browser Browser Browser Browser Browser არის ვებ ბრაუზერი, რომელიც ვებგვერდებს და აპლიკაციებს ელვისებური სისწრაფით ხსნის. ის არის სწრაფი, სტაბილური და გამოსაყენებლად მარტივი. დაათვალიერეთ ვები უფრო უსაფრთხოდ Carbon Browser Browser Browser Browser Browser Browser-ში ჩაშენებული საზიანო პროგრამული უზრუნველყოფისა და თაღლითობისგან დაცვის საშუალებით.</translation>
+<translation id="6434250628340475518">Google Chrome OS სისტემა</translation>
+<translation id="6455857529632101747">მოგესალმებათ Carbon Browser Browser Browser Browser Browser Browser პროფილები</translation>
+<translation id="6457450909262716557">{SECONDS,plural, =1{Carbon Browser Browser Browser Browser Browser Browser გადაიტვირთება 1 წამში}other{Carbon Browser Browser Browser Browser Browser Browser გადაიტვირთება # წამში}}</translation>
+<translation id="6475912303565314141">იგი ასევე აკონტროლებს, თუ რომელი გვერდი გამოჩნდება Carbon Browser Browser Browser Browser Browser Browser-ის გაშვებისას.</translation>
+<translation id="6510925080656968729">Carbon Browser Browser Browser Browser Browser Browser-ის დეინსტალაცია</translation>
+<translation id="6542839706527980775">თითოეულ პროფილში ინახება საკუთარი Carbon Browser Browser Browser Browser Browser Browser ინფორმაცია, როგორიცაა სანიშნეები, ისტორია, პაროლები და სხვა</translation>
+<translation id="6570579332384693436">მართლწერის შეცდომების გასასწორებლად, Carbon Browser Browser Browser Browser Browser Browser თქვენ მიერ ტექსტის ველში აკრეფილ ტექსტებს Google-ს უგზავნის</translation>
+<translation id="6598877126913850652">Carbon Browser Browser Browser Browser Browser Browser-ის შეტყობინების პარამეტრებზე გადასვლა</translation>
+<translation id="6613594504749178791">თქვენი ცვლილებები გააქტიურდება Carbon Browser Browser Browser Browser Browser Browser-ის შემდეგი გაშვებისას.</translation>
+<translation id="665732753414869868">თქვენი შემოგარენის 3-განზომილებიანი რუკის შესაქმნელად Carbon Browser Browser Browser Browser Browser Browser საჭიროებს მეხსიერებაზე წვდომის ნებართვას</translation>
+<translation id="6676384891291319759">წვდომა ინტერნეტზე</translation>
+<translation id="6709350901466051922">Carbon Browser Browser Browser Browser Browser Browser საჭიროებს მიკროფონზე წვდომის ნებართვას ამ საიტისთვის</translation>
+<translation id="6717134281241384636">თქვენი პროფილის გამოყენება შეუძლებელია, რადგან ის Carbon Browser Browser Browser Browser Browser Browser-ის უახლესი ვერსიიდანაა.
+
+ზოგიერთი ფუნქცია შეიძლება მიუწვდომელი იყოს. გთხოვთ მიუთითოთ სხვადასხვა პროფილის დირექტორია ან გამოიყენეთ Carbon Browser Browser Browser Browser Browser Browser-ის ახალი ვერსია.</translation>
+<translation id="6734080038664603509">განაახლეთ &amp;Carbon Browser Browser Browser Browser Browser Browser</translation>
+<translation id="6734291798041940871">Carbon Browser Browser Browser Browser Browser Browser უკვე დაინსტალირებულია თქვენი კომპიუტერის ყველა მომხმარებლისთვის.</translation>
+<translation id="673636774878526923">თქვენს Carbon Browser Browser Browser Browser Browser Browser კონტენტზე თქვენი ნებისმიერი მოწყობილობიდან წვდომისთვის შედით სისტემაში, შემდეგ კი ჩართეთ სინქრონიზაცია.</translation>
+<translation id="6774082503108938489">თქვენმა მშობელმა გამორთო „ნებართვები საიტებისთვის, აპებისა და გაფართოებებისთვის“ Carbon Browser Browser Browser Browser Browser Browser-ისთვის. ეს <ph name="EXTENSION_TYPE_PARAMETER" /> ვერ ჩაირთვება.</translation>
+<translation id="6827182711503025204">Google Chrome OS-ის ინსტალაციის შემთხვევაში, თქვენს მოწყობილობაზე შენახული ყველა მონაცემი გადაიწერება.</translation>
+<translation id="6847869444787758381">Carbon Browser Browser Browser Browser Browser Browser გაცნობებთ, თუ თქვენს პაროლებს ვინმე გატეხავს</translation>
+<translation id="6857782730669500492">Carbon Browser Browser Browser Browser Browser Browser — <ph name="PAGE_TITLE" /></translation>
+<translation id="6863361426438995919">Google Pay (Carbon Browser Browser Browser Browser Browser Browser-ში კოპირებული)</translation>
+<translation id="6873893289264747459">Carbon Browser Browser Browser Browser Browser Browser-მა აღმოაჩინა, რომ „<ph name="EXTENSION_NAME" />“ შეიცავს მავნე პროგრამას</translation>
+<translation id="6893813176749746474">Carbon Browser Browser Browser Browser Browser Browser განახლდა, მაგრამ თქვენ მას არ იყენებდით მინიმუმ 30 დღის განმავლობაში.</translation>
+<translation id="691026815377248078">დაწყვილების გასაგრძელებლად Carbon Browser Browser Browser Browser Browser Browser საჭიროებს Bluetooth-ზე წვდომას. <ph name="IDS_BLUETOOTH_DEVICE_CHOOSER_AUTHORIZE_BLUETOOTH_LINK" /></translation>
+<translation id="6964305034639999644">ბმულის გახსნა Carbon Browser Browser Browser Browser Browser Browser-ის ინკო&amp;გნიტო ფანჯარაში</translation>
+<translation id="6978145336957848883">სუსტი პაროლები ადვილი გამოსაცნობია, ამიტომ მიეცით საშუალება Carbon Browser Browser Browser Browser Browser Browser-ს, <ph name="BEGIN_LINK" />თქვენთვის შექმნას და დაიმახსოვროს ძლიერი პაროლები<ph name="END_LINK" />.</translation>
+<translation id="6990124437352146030">Carbon Browser Browser Browser Browser Browser Browser საჭიროებს თქვენს მიკროფონზე წვდომის ნებართვას ამ საიტისთვის</translation>
+<translation id="705851970750939768">განაახლეთ Carbon Browser Browser Browser Browser Browser Browser</translation>
+<translation id="7067091210845072982">თუ სურათს არ ექნება სასარგებლო აღწერილობა, Carbon Browser Browser Browser Browser Browser Browser შეეცდება მის უზრუნველყოფას. აღწერილობების შესაქმნელად სურათები იგზავნება Google-ში.</translation>
+<translation id="718435575166326686">Carbon Browser Browser Browser Browser Browser Browser საჭიროებს კამერზე წვდომის ნებართვას ამ საიტისთვის</translation>
+<translation id="7196312274710523067">Carbon Browser Browser Browser Browser Browser Browser-ის გაშვება ვერ მოხერხდა. ცადეთ ხელახლა.</translation>
+<translation id="7197677400338048821">Carbon Browser Browser Browser Browser Browser Browser ვერ ახერხებს პაროლების შემოწმებას. ცადეთ 24 საათში.</translation>
+<translation id="7223968959479464213">დავალებათა მენეჯერი - Carbon Browser Browser Browser Browser Browser Browser</translation>
+<translation id="731644333568559921">&amp;Google Chrome OS-ის განახლება</translation>
+<translation id="731795002583552498">მიმდინარეობს Carbon Browser Browser Browser Browser Browser Browser-ის განახლება</translation>
+<translation id="7318036098707714271">თქვენი გამორჩეული ფაილი დაზიანებულია ან არასწორია.
+
+Carbon Browser Browser Browser Browser Browser Browser ვერ შეძლებს თქვენი პარამეტრების აღდგენას.</translation>
+<translation id="7337881442233988129">ქრომინუმი</translation>
+<translation id="7339898014177206373">ახალი ფანჯარა</translation>
+<translation id="734373864078049451">თქვენი ვები, სანიშნეები და Carbon Browser Browser Browser Browser Browser Browser-ის სხვა მასალა არის აქ.</translation>
+<translation id="7349591376906416160">თქვენი სისტემის ადმინისტრატორმა მოახდინა Carbon Browser Browser Browser Browser Browser Browser-ის კონფიგურაცია იმგვარად, რომ <ph name="TARGET_URL_HOSTNAME" />-ზე წვდომისთვის საჭიროა <ph name="ALTERNATIVE_BROWSER_NAME" />-ის გახსნა.</translation>
+<translation id="7448255348454382571">გადატვირთეთ Google Chrome OS</translation>
+<translation id="7449453770951226939"><ph name="PAGE_TITLE" /> — Carbon Browser Browser Browser Browser Browser Browser Dev</translation>
+<translation id="7451052299415159299">Carbon Browser Browser Browser Browser Browser Browser საჭიროებს თქვენს კამერაზე წვდომის ნებართვას ამ საიტისთვის</translation>
+<translation id="7483335560992089831">შეუძლებელია იმავე Carbon Browser Browser Browser Browser Browser Browser-ის ვერსიის დაყენება, რომელიც ამჟამად გაშვებულია. დახურეთ Carbon Browser Browser Browser Browser Browser Browser და ხელახლა სცადეთ.</translation>
+<translation id="753534427205733210">{0,plural, =1{Carbon Browser Browser Browser Browser Browser Browser ხელახლა გაეშვება 1 წუთში}other{Carbon Browser Browser Browser Browser Browser Browser ხელახლა გაეშვება # წუთში}}</translation>
+<translation id="7549178288319965365">Carbon Browser Browser Browser Browser Browser Browser-ის OS-ის შესახებ</translation>
+<translation id="7561906087460245826">მონაცემების Carbon Browser Browser Browser Browser Browser Browser-იდანაც გასუფთავება (<ph name="URL" />)</translation>
+<translation id="7585853947355360626">თუ პარამეტრი ამ გვერდზე არ გამოჩნდება, ცადეთ მისი პოვნა <ph name="LINK_BEGIN" />Google Chrome OS-ის პარამეტრებში<ph name="LINK_END" /></translation>
+<translation id="761356813943268536">Carbon Browser Browser Browser Browser Browser Browser იყენებს თქვენს კამერას და მიკროფონს.</translation>
+<translation id="7617377681829253106">Carbon Browser Browser Browser Browser Browser Browser გაუმჯობესდა</translation>
+<translation id="7627575518938382525"><ph name="BEGIN_PARAGRAPH1" />დაწყებამდე დარწმუნდით, რომ თქვენი მონაცემების უახლესი სარეზერვო ასლი გაქვთ შექმნილი. Google Chrome OS-ის ინსტალაციის შემთხვევაში, თქვენს მყარ დისკზე შენახული ყველა მონაცემი გადაიწერება.<ph name="END_PARAGRAPH1" />
+          <ph name="BEGIN_PARAGRAPH2" />Google არ აგებს პასუხს მონაცემთა დაკარგვაზე და არ იძლევა გარანტიას, რომ Google Chrome OS არასერტიფიცირებულ მოდელებზე იმუშავებს. სერტიფიცირებული მოდელების შესახებ დამატებითი ინფორმაციისთვის მოინახულეთ [TBD].<ph name="END_PARAGRAPH2" />
+          <ph name="BEGIN_PARAGRAPH3" />შეიტყვეთ მეტი Google Chrome OS-ის ინსტალაციისა და მონაცემთა ამოშლის შესახებ: [TBD URL]<ph name="END_PARAGRAPH3" />
+          <ph name="BEGIN_PARAGRAPH4" />თუ გასაგრძელებლად მზად ხართ, დააწკაპუნეთ „Google Chrome OS-ის დაინსტალირებაზე“, რის შემდეგაც ინსტალაციისთვის საჭირო რამდენიმე მარტივი ნაბიჯის გავლაში დაგეხმარებით. თქვენს კომპიუტერში ცვლილებების შეტანამდე დადასტურების საშუალება კიდევ ერთხელ მოგეცემათ.<ph name="END_PARAGRAPH4" /></translation>
+<translation id="7686590090926151193">Carbon Browser Browser Browser Browser Browser Browser არ არის თქვენი ნაგულისხმევი ბრაუზერი</translation>
+<translation id="7689606757190482937">მოახდინეთ Carbon Browser Browser Browser Browser Browser Browser-ის სინქრონიზაცია და პერსონალიზება თქვენს ყველა მოწყობილობას შორის</translation>
+<translation id="7729447699958282447">Carbon Browser Browser Browser Browser Browser Browser-მა ვერ დაასინქრონა თქვენი მონაცემები, რადგან სინქრონიზაცია თქვენი დომენისთვის არ არის ხელმისაწვდომი.</translation>
+<translation id="7745317241717453663">ეს მოქმედება წაშლის თქვენს დათვალიერების მონაცემებს ამ მოწყობილობიდან. თქვენი მონაცემების მოგვიანებით მისაღებად, შედით Carbon Browser Browser Browser Browser Browser Browser-ში, როგორც <ph name="USER_EMAIL" />.</translation>
+<translation id="7747138024166251722">ინსტალერმა ვერ შექმნა დროებითი დირექტორია. გთხოვთ, გადაამოწმოთ დისკზე თავისუფალი სივრცე და პროგრამული უზრუნველყოფის დაყენების ნებართვა.</translation>
+<translation id="7790626492778995050"><ph name="PAGE_TITLE" /> — Carbon Browser Browser Browser Browser Browser Browser Canary</translation>
+<translation id="7828947555739565424">Carbon Browser Browser Browser Browser Browser Browser პროფილი ამ ანგარიშით უკვე არსებობს ამ მოწყობილობაზე</translation>
+<translation id="7857220146454061152">Carbon Browser Browser Browser Browser Browser Browser-ის მომავალი განახლებების მისაღებად დაგჭირდებათ OS X 10.11 ან უფრო ახალი ვერსია. ეს კომპიუტერი იყენებს OS X 10.10-ს.</translation>
+<translation id="7867198900892795913">Carbon Browser Browser Browser Browser Browser Browser ვერ განახლდა უახლეს ვერსიაზე, რომელსაც დამატებულ აქვს ახალი ფუნქციები და უსაფრთხოების სისტემის შესწორებები.</translation>
+<translation id="7898472181347242998">თქვენი მოწყობილობის განახლების სტატუსის სანახავად გადადით <ph name="LINK_BEGIN" />Google Chrome OS-ის პარამეტრებზე<ph name="LINK_END" /></translation>
+<translation id="7937630085815544518">თქვენ შესული ხართ Carbon Browser Browser Browser Browser Browser Browser-ში როგორც <ph name="USER_EMAIL_ADDRESS" />. გთხოვთ გამოიყენოთ იგივე ანგარიში ხელახლა შესვლისას.</translation>
+<translation id="7975919845073681630">ეს Carbon Browser Browser Browser Browser Browser Browser-ის მეორადი ინსტალაცია არის და ნაგულისხმევ ბრაუზერად ის ვერ დაყენდება.</translation>
+<translation id="8013436988911883588">Carbon Browser Browser Browser Browser Browser Browser-ისთვის წვდომის მინიჭების შემდეგ ცალკეული ვებსაიტები შეძლებს თქვენგან წვდომის მოთხოვნას.</translation>
+<translation id="8045118833343856403">მითითებული ანგარიშები არ არის შესული Carbon Browser Browser Browser Browser Browser Browser პროფილებში. თუ ანგარიშის სხვა პროფილში გამოყენება გსურთ, პირველ რიგში, წაშალეთ შესაბამისი პროფილი.</translation>
+<translation id="8105840573057009683">Carbon Browser Browser Browser Browser Browser Browser საჭიროებს მდებარეობაზე წვდომის ნებართვას ამ საიტისთვის</translation>
+<translation id="81770708095080097">Carbon Browser Browser Browser Browser Browser Browser-მა დაბლოკა ეს ფაილი, რადგან ის სახიფათოა.</translation>
+<translation id="8248265253516264921">თუ სურათს არ ექნება სასარგებლო აღწერილობა, Carbon Browser Browser Browser Browser Browser Browser შეეცდება მის უზრუნველყოფას. აღწერილობების შესაქმნელად სურათები იგზავნება Google-ში. ამის გამორთვა ნებისმიერ დროს შეგიძლიათ პარამეტრებიდან.</translation>
+<translation id="8266560134891435528">Carbon Browser Browser Browser Browser Browser Browser ვერ ახერხებს თქვენი პაროლების შემოწმებას, რადგან შესული არ ხართ</translation>
+<translation id="8276522524898344151">Carbon Browser Browser Browser Browser Browser Browser ცდილობს პაროლების კოპირებას.</translation>
+<translation id="8290862415967981663">Carbon Browser Browser Browser Browser Browser Browser-მა დაბლოკა ეს ფაილი, რადგან ის შეიძლება სახიფათო იყოს.</translation>
+<translation id="8330519371938183845">შედით სისტემაში, რათა მოახდინოთ Carbon Browser Browser Browser Browser Browser Browser-ის სინქრონიზაცია და პერსონალიზება თქვენს ყველა მოწყობილობას შორის</translation>
+<translation id="8340674089072921962"><ph name="USER_EMAIL_ADDRESS" /> ადრე იყენებდა Carbon Browser Browser Browser Browser Browser Browser-ს</translation>
+<translation id="8417404458978023919">{0,plural, =1{ხელახლა გაუშვით Carbon Browser Browser Browser Browser Browser Browser დღის განმავლობაში}other{ხელახლა გაუშვით Carbon Browser Browser Browser Browser Browser Browser # დღის განმავლობაში}}</translation>
+<translation id="8453117565092476964">ინსტალაციის პროგრამის არქივი დაზიანებულია ან არასწორია. ხელახლა ჩამოტვირთეთ Carbon Browser Browser Browser Browser Browser Browser.</translation>
+<translation id="8493179195440786826">Carbon Browser Browser Browser Browser Browser Browser მოძველდა</translation>
+<translation id="8550334526674375523">სამსახურის ეს პროფილი თქვენი პირადი პროფილისგან სრულიად დამოუკიდებლად ფუნქციონირებს.</translation>
+<translation id="8558383651099478961">თქვენმა მშობელმა გამორთო „ნებართვები საიტებისთვის, აპებისა და გაფართოებებისთვის“ Carbon Browser Browser Browser Browser Browser Browser-ისთვის. ეს <ph name="EXTENSION_TYPE_PARAMETER" /> ვერ დაემატება.</translation>
+<translation id="8568283329061645092">პაროლების Carbon Browser Browser Browser Browser Browser Browser-ის მეშვეობით შესამოწმებლად შედით სისტემაში თქვენი Google ანგარიშით</translation>
+<translation id="8586442755830160949">Copyright <ph name="YEAR" /> Carbon Browser Browser Browser X Labs. ყველა უფლება დაცულია.</translation>
+<translation id="8619360774459241877">მიმდინარეობს Carbon Browser Browser Browser Browser Browser Browser-ის გაშვება…</translation>
+<translation id="8621669128220841554">ინსტალაცია ვერ განხორციელდა გაურკვეველი შეცდომის გამო. ხელახლა ჩამოტვირთეთ Carbon Browser Browser Browser Browser Browser Browser.</translation>
+<translation id="8697124171261953979">იგი ასევე აკონტროლებს, თუ რომელი გვერდი გამოჩნდება Carbon Browser Browser Browser Browser Browser Browser-ის გაშვებისას ან Omnibox-ში ძიების დროს.</translation>
+<translation id="8704119203788522458">ეს არის თქვენი Carbon Browser Browser Browser Browser Browser Browser</translation>
+<translation id="8796602469536043152">Carbon Browser Browser Browser Browser Browser Browser საჭიროებს თქვენს კამერასა და მიკროფონზე წვდომის ნებართვას ამ საიტისთვის</translation>
+<translation id="8803635938069941624">Google Chrome OS ტერმინები</translation>
+<translation id="8821041990367117597">Carbon Browser Browser Browser Browser Browser Browser-მა ვერ დაასინქრონა თქვენი მონაცემები, რადგან თქვენს ანგარიშზე შესვლის დეტალები მოძველდა.</translation>
+<translation id="8862326446509486874">თქვენ არ გაქვთ შესაბამისი უფლებები სისტემის დონეზე ინსტალაციისთვის. სცადეთ ინსტალაციის პროგრამის ხელახლა გაშვება ადმინისტრატორის სტატუსით.</translation>
+<translation id="8880203542552872219">ამ შემთხევაში ჩაასწორეთ Carbon Browser Browser Browser Browser Browser Browser-ში შენახული პაროლი ახლის მიხედვით.</translation>
+<translation id="8897323336392112261">იგი ასევე აკონტროლებს, თუ რომელი გვერდი გამოჩნდება Carbon Browser Browser Browser Browser Browser Browser-ის გაშვებისას ან საწყისი გვერდის ღილაკზე დაწკაპუნებისას.</translation>
+<translation id="8907580949721785412">Carbon Browser Browser Browser Browser Browser Browser ცდილობს პაროლების ჩვენებას. ჩაწერეთ თქვენი Windows-ის პაროლი ამის დასაშვებად.</translation>
+<translation id="8941642502866065432">Carbon Browser Browser Browser Browser Browser Browser-ის განახლება ვერ მოხერხდა</translation>
+<translation id="8974095189086268230">Google Chrome OS-ს უზრუნველყოფს დამატებითი <ph name="BEGIN_LINK_CROS_OSS" />ღია წყაროს პროგრამული უზრუნველყოფა<ph name="END_LINK_CROS_OSS" />.</translation>
+<translation id="8986207147630327271">თქვენ აპირებთ, ამ ბრაუზერს სამსახურის პროფილი დაამატოთ, რითაც თქვენს ადმინისტრატორს კონტროლს მხოლოდ სამსახურის პროფილზე მიანიჭებთ.</translation>
+<translation id="9019929317751753759">Carbon Browser Browser Browser Browser Browser Browser-ის უსაფრთხოების გასაძლიერებლად, ჩვენ გავთიშეთ შემდეგი გაფართოება, რომელიც არ არის ხელმისაწვდომი <ph name="IDS_EXTENSION_WEB_STORE_TITLE" />-ში და, შესაძლოა, თქვენი თანხმობის გარეშე დაემატა.</translation>
+<translation id="9089354809943900324">Carbon Browser Browser Browser Browser Browser Browser მოძველდა</translation>
+<translation id="9093206154853821181">{0,plural, =1{Carbon Browser Browser Browser Browser Browser Browser ხელახლა გაეშვება 1 საათში}other{Carbon Browser Browser Browser Browser Browser Browser ხელახლა გაეშვება # საათში}}</translation>
+<translation id="91086099826398415">ბმულის გახსნა Carbon Browser Browser Browser Browser Browser Browser-ის ახალ ჩა&amp;ნართში</translation>
+<translation id="911206726377975832">ასევე წაშალოთ თქვენი დათვალიერების მონაცემები?</translation>
+<translation id="9158494823179993217">თქვენი სისტემის ადმინისტრატორმა მოახდინა Carbon Browser Browser Browser Browser Browser Browser-ის კონფიგურაცია იმგვარად, რომ <ph name="TARGET_URL_HOSTNAME" />-ზე წვდომისთვის საჭიროა ალტერნატიული ბრაუზერის გახსნა.</translation>
+<translation id="9185526690718004400">ხელახლა გაშვება &amp;Carbon Browser Browser Browser Browser Browser Browser-ის გასაახლებლად</translation>
+<translation id="9190841055450128916">Carbon Browser Browser Browser Browser Browser Browser (mDNS-In)</translation>
+<translation id="9214764063801632699">Google Chrome OS სისტემა</translation>
+<translation id="93478295209880648">Carbon Browser Browser Browser Browser Browser Browser-მა შეიძლება არასწორად იმუშაოს, რადგან ის აღარ არის მხარდაჭერილი Windows XP-სა და Windows Vista-ზე</translation>
+<translation id="965162752251293939">ვინ იყენებს Carbon Browser Browser Browser Browser Browser Browser-ს?</translation>
+<translation id="985602178874221306">Carbon Browser Browser Browser Browser Browser Browser-ის ავტორები</translation>
+</translationbundle>

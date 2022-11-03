@@ -1,0 +1,3 @@
+AXWebArea AXRoleDescription='HTML content'
+++AXIncrementor AXRoleDescription='stepper' AXValue=5
+++AXIncrementor AXRoleDescription='stepper' AXValue=5

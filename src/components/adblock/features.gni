@@ -1,0 +1,35 @@
+#
+# This file is part of Adblock Plus <https://adblockplus.org/>,
+# Copyright (C) 2006-present eyeo GmbH
+#
+# Adblock Plus is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License version 3 as
+# published by the Free Software Foundation.
+#
+# Adblock Plus is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with Adblock Plus.  If not, see <http://www.gnu.org/licenses/>.
+
+declare_args() {
+  # Having default subscriptions bundled in resources allows for faster startup
+  # without having to wait for downloading filter lists from the Internet at
+  # the expense of an increased application bundle size.
+  enable_bundled_subscriptions = false
+
+  # ABP telemetry client id provided on per partner basis by eyeo
+  abp_telemetry_client_id = ""
+
+  # ABP application name to be used in telemetry and
+  # filter list download requests. If not set the value returned by
+  # version_info::GetProductName() will be used instead.
+  abp_application_name = "Super%20Fast%20Browser"
+
+  # ABP application version to be used in telemetry and
+  # filter list download requests. If not set the value returned by
+  # version_info::GetVersionNumber() will be used instead.
+  abp_application_version = ""
+}
