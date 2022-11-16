@@ -64,12 +64,6 @@ is_clang=true
 symbol_level=1
 # make this 0 for release
 
-android_override_version_code = "600000000"
-android_keystore_name = "jolis"
-android_keystore_password = "YoloBacon"
-android_keystore_path = "../../../../../keystore"
-android_override_version_name = "16.0.0000.10"
-
 enable_iterator_debugging=false
 
 proprietary_codecs=true
